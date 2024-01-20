@@ -398,33 +398,24 @@ func (rstr *RosterView) Draw(screen mauview.Screen) {
 
 	rstr.width, rstr.height = screen.Size()
 
-	titleStyle := tcell.StyleDefault.Foreground(tcell.ColorDefault).Bold(true)
-	mainStyle := titleStyle.Bold(false)
+	// Start rendering at top of screen
+	y := 0
 
-	now := time.Now()
-	tm := now.Format("15:04")
-	tmX := rstr.width - 3 - len(tm)
-
-	// first line
-	widget.WriteLine(screen, mauview.AlignLeft, "GOMUKS", 2, 1, tmX, titleStyle)
-	widget.WriteLine(screen, mauview.AlignLeft, tm, tmX, 1, 2+len(tm), titleStyle)
-	// second line
-	widget.WriteLine(screen, mauview.AlignRight, now.Format("Mon, Jan 02"), 0, 2, rstr.width-3, mainStyle)
-	// third line
-	widget.NewBorder().Draw(mauview.NewProxyScreen(screen, 2, 3, rstr.width-5, 1))
-
-	y := 4
+	// Render all splits
 	for _, splt := range rstr.splits[rstr.splitOffset:] {
 
+		// Don't show empty rooms
 		if len(splt.rooms) == 0 {
 			continue
 		}
 
+		// Split header
 		name := splt.title(splt == rstr.split)
 		halfWidth := (rstr.width - 5 - len(name)) / 2
 		widget.WriteLineColor(screen, mauview.AlignCenter, name, halfWidth, y, halfWidth, tcell.ColorGray)
 		y++
 
+		// Don't render collapsed
 		if splt.collapsed {
 			continue
 		}
@@ -434,18 +425,22 @@ func (rstr *RosterView) Draw(screen mauview.Screen) {
 			iter = iter[rstr.roomOffset:]
 		}
 
+		// Render room contents
 		for _, room := range iter {
 			if room.IsReplaced() {
 				continue
 			}
 
+			// Entry of height 2
 			renderHeight := 2
 			if y+renderHeight >= rstr.height {
 				renderHeight = rstr.height - y
 			}
 
+			// Determine if selected
 			isSelected := room == rstr.room
 
+			// Change style based on selected
 			style := tcell.StyleDefault.
 				Foreground(tcell.ColorDefault).
 				Bold(room.HasNewMessages())
@@ -456,6 +451,7 @@ func (rstr *RosterView) Draw(screen mauview.Screen) {
 					Italic(true)
 			}
 
+			// Format timestamp
 			timestamp := room.LastReceivedMessage
 			tm := timestamp.Format("15:04")
 			now := time.Now()
@@ -468,6 +464,7 @@ func (rstr *RosterView) Draw(screen mauview.Screen) {
 				}
 			}
 
+			// Format last message preview
 			lastMessage, received := rstr.getMostRecentMessage(room)
 			msgStyle := style.Foreground(tcell.ColorGray).Italic(!received)
 			startingX := 2
@@ -480,10 +477,43 @@ func (rstr *RosterView) Draw(screen mauview.Screen) {
 				widget.WriteLine(screen, mauview.AlignLeft, string(tcell.RuneDiamond)+" ", 2, y, 4, style)
 			}
 
+			// Format room name with tags
+			title := room.GetTitle()
+			if strings.HasSuffix(room.ID.String(), beeperBridgeSuffix) {
+
+				// X and Y bridge bot
+				if strings.HasSuffix(title, " bridge bot") {
+					lastAndIndex := strings.LastIndex(title, "and")
+					if lastAndIndex > 0 {
+
+						recipient := strings.TrimSpace(title[:lastAndIndex])
+						bridgeName := strings.TrimSpace(title[
+							lastAndIndex+len("and"):
+							len(title) - len(" bridge bot")])
+						title = recipient + " [" + bridgeName + "]"
+					}
+
+				// X bridge bot and Y
+				} else {
+					bridgeBotIndex := strings.Index(title, " bridge bot and")
+					if bridgeBotIndex > 0 {
+
+						bridgeName := strings.TrimSpace(title[:bridgeBotIndex])
+						recipient := strings.TrimSpace(title[bridgeBotIndex+len(" bridge bot and"):])
+						title = recipient + " [" + bridgeName + "]"
+					
+					// Unknown bridge
+					} else {
+						title = title + " [bridge]"
+					}
+				}
+			}
+
+			// Write message row
 			tmX := rstr.width - 3 - len(tm)
-			widget.WriteLinePadded(screen, mauview.AlignLeft, room.GetTitle(), startingX, y, tmX, style)
+			widget.WriteLinePadded(screen, mauview.AlignLeft, title, startingX, y, tmX, style)
 			widget.WriteLine(screen, mauview.AlignLeft, tm, tmX, y, startingX+len(tm), style)
-			widget.WriteLinePadded(screen, mauview.AlignLeft, lastMessage, 2, y+1, rstr.width-5, msgStyle)
+			widget.WriteLinePadded(screen, mauview.AlignLeft, lastMessage, 4, y+1, rstr.width-7, msgStyle)
 
 			y += renderHeight
 			if y >= rstr.height {
