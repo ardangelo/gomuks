@@ -21,7 +21,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mattn/go-runewidth"
+	//"github.com/mattn/go-runewidth"
 
 	"go.mau.fi/mauview"
 	"go.mau.fi/tcell"
@@ -34,11 +34,29 @@ import (
 )
 
 type MemberList struct {
-	list roomMemberList
+
+	flex *mauview.Flex
+	listView *mauview.TextView
+
+	memberList roomMemberList
 }
 
 func NewMemberList() *MemberList {
-	return &MemberList{}
+	ml := &MemberList{
+		listView: mauview.NewTextView(),
+		flex: mauview.NewFlex().SetDirection(mauview.FlexColumn),
+	}
+
+	ml.listView.
+		SetScrollable(true).
+		SetWrap(false).
+		SetDynamicColors(true)
+
+	ml.flex.
+		AddFixedComponent(widget.NewBorder(), 1).
+		AddProportionalComponent(ml.listView, 1)
+
+	return ml
 }
 
 type memberListItem struct {
@@ -67,7 +85,7 @@ func (rml roomMemberList) Swap(i, j int) {
 }
 
 func (ml *MemberList) Update(data map[id.UserID]*rooms.Member, levels *event.PowerLevelsEventContent) *MemberList {
-	ml.list = make(roomMemberList, len(data))
+	ml.memberList = make(roomMemberList, len(data))
 	i := 0
 	highestLevel := math.MinInt32
 	count := 0
@@ -93,7 +111,7 @@ func (ml *MemberList) Update(data map[id.UserID]*rooms.Member, levels *event.Pow
 		} else if level > levels.UsersDefault {
 			sigil = '+'
 		}
-		ml.list[i] = &memberListItem{
+		ml.memberList[i] = &memberListItem{
 			Member:     *member,
 			UserID:     userID,
 			PowerLevel: level,
@@ -102,27 +120,37 @@ func (ml *MemberList) Update(data map[id.UserID]*rooms.Member, levels *event.Pow
 		}
 		i++
 	}
-	sort.Sort(ml.list)
+	sort.Sort(ml.memberList)
+
+	// Create text view for member list
+	// TODO: figure out TextView dynamic colors
+	var sb strings.Builder
+	for _, member := range ml.memberList {
+
+		// Sigil
+		if member.Sigil != ' ' {
+			sb.WriteRune(member.Sigil)
+		} else {
+			sb.WriteRune(' ')
+		}
+
+		sb.WriteRune(' ')
+
+		// Display name
+		if member.Membership == "invite" {
+			sb.WriteRune('(')
+		}
+		sb.WriteString(member.Displayname)
+		if member.Membership == "invite" {
+			sb.WriteRune('(')
+		}
+		sb.WriteRune('\n')
+	}
+	ml.listView.SetText(sb.String())
+
 	return ml
 }
 
 func (ml *MemberList) Draw(screen mauview.Screen) {
-	width, _ := screen.Size()
-	sigilStyle := tcell.StyleDefault.Background(tcell.ColorGreen).Foreground(tcell.ColorDefault)
-	for y, member := range ml.list {
-		if member.Sigil != ' ' {
-			screen.SetCell(0, y, sigilStyle, member.Sigil)
-		}
-		if member.Membership == "invite" {
-			widget.WriteLineSimpleColor(screen, member.Displayname, 2, y, member.Color)
-			screen.SetCell(1, y, tcell.StyleDefault, '(')
-			if sw := runewidth.StringWidth(member.Displayname); sw+2 < width {
-				screen.SetCell(sw+2, y, tcell.StyleDefault, ')')
-			} else {
-				screen.SetCell(width-1, y, tcell.StyleDefault, ')')
-			}
-		} else {
-			widget.WriteLineSimpleColor(screen, member.Displayname, 1, y, member.Color)
-		}
-	}
+	ml.flex.Draw(screen)
 }
