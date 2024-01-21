@@ -45,10 +45,11 @@ type MainView struct {
 	compactMode  bool
 
 	// Views
+	modal mauview.Component
 	roomView     *mauview.Box
 	roomListView *RoomList
 	fullView     *FullView
-	modal mauview.Component
+	hubView      *HubView
 
 	// Room control
 	currentRoom  *RoomView
@@ -76,7 +77,7 @@ type MainView struct {
 
 func (ui *GomuksUI) NewMainView() mauview.Component {
 	mainView := &MainView{
-		compactMode : false,
+		compactMode : true,
 
 		roomView: mauview.NewBox(nil).SetBorder(false),
 
@@ -89,6 +90,7 @@ func (ui *GomuksUI) NewMainView() mauview.Component {
 	}
 	mainView.roomListView = NewRoomList(mainView)
 	mainView.fullView = NewFullView(mainView)
+	mainView.hubView = NewHubView(mainView)
 	mainView.cmdProcessor = NewCommandProcessor(mainView)
 
 	if led, err := beepberry.NewLED(); err == nil {
@@ -140,7 +142,7 @@ func (view *MainView) HideModal() {
 func (view *MainView) Draw(screen mauview.Screen) {
 
 	if view.compactMode {
-
+		view.hubView.Draw(screen)
 	} else {
 		view.fullView.Draw(screen)
 	}
@@ -225,7 +227,12 @@ func (view *MainView) OnKeyEvent(event mauview.KeyEvent) bool {
 		msgView := view.currentRoom.MessageView()
 		msgView.AddScrollOffset(-msgView.TotalHeight())
 	case "add_newline":
-		return view.fullView.OnKeyEvent(tcell.NewEventKey(tcell.KeyEnter, '\n', event.Modifiers()|tcell.ModShift))
+		newlineEvent := tcell.NewEventKey(tcell.KeyEnter, '\n', event.Modifiers()|tcell.ModShift)
+		if view.compactMode {
+			return view.hubView.OnKeyEvent(newlineEvent)
+		} else {
+			return view.fullView.OnKeyEvent(newlineEvent)
+		}
 	case "next_active_room":
 		view.SwitchRoom(view.roomListView.NextWithActivity())
 	case "show_bare":
@@ -235,10 +242,11 @@ func (view *MainView) OnKeyEvent(event mauview.KeyEvent) bool {
 	}
 	return true
 defaultHandler:
-	if view.config.Preferences.HideRoomList {
-		return view.roomView.OnKeyEvent(event)
+	if view.compactMode {
+		return view.hubView.OnKeyEvent(event)
+	} else {
+		return view.fullView.OnKeyEvent(event)
 	}
-	return view.fullView.OnKeyEvent(event)
 }
 
 const WheelScrollOffsetDiff = 3
@@ -295,7 +303,13 @@ func (view *MainView) switchRoom(tag string, room *rooms.Room, lock bool) {
 	view.currentRoom = roomView
 	view.MarkRead(roomView)
 	view.roomListView.SetSelected(tag, room)
-	view.fullView.flex.SetFocused(view.roomView)
+
+	if (view.compactMode) {
+		view.hubView.SwitchRoom(room)
+	} else {
+		view.fullView.SwitchRoom(room)
+	}
+
 	view.focused = view.roomView
 	view.roomView.Focus()
 	view.parent.Render()

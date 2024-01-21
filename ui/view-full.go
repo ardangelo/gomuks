@@ -17,11 +17,10 @@
 package ui
 
 import (
-	"time"
-
 	"go.mau.fi/mauview"
 	"go.mau.fi/tcell"
 
+	"maunium.net/go/gomuks/matrix/rooms"
 	"maunium.net/go/gomuks/config"
 	"maunium.net/go/gomuks/ui/widget"
 )
@@ -29,12 +28,9 @@ import (
 type FullView struct {
 
 	// Views
-	roomView     *mauview.Box
-	roomListView *RoomList
 	flex *mauview.Flex
 
-	focused      mauview.Focusable
-	lastFocusTime time.Time
+	focused mauview.Focusable
 
 	mainView *MainView
 }
@@ -51,6 +47,14 @@ func NewFullView(mainView *MainView) *FullView {
 		AddProportionalComponent(mainView.roomView, 1)
 
 	return fullView
+}
+
+func (view *FullView) SwitchRoom(room *rooms.Room) {
+	if room == nil {
+		return
+	}
+
+	view.flex.SetFocused(view.mainView.roomView)
 }
 
 func (view *FullView) Draw(screen mauview.Screen) {

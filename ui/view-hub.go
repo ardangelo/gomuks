@@ -17,65 +17,65 @@
 package ui
 
 import (
-	//"strings"
-	//"time"
-
-	sync "github.com/sasha-s/go-deadlock"
-
 	"go.mau.fi/mauview"
 	"go.mau.fi/tcell"
 
+	"maunium.net/go/gomuks/matrix/rooms"
 	"maunium.net/go/gomuks/config"
-	//"maunium.net/go/gomuks/matrix/rooms"
-	"maunium.net/go/gomuks/ui/widget"
-	//"maunium.net/go/mautrix/event"
-
-	//"maunium.net/go/gomuks/debug"
 )
 
 type HubView struct {
-	mauview.Component
-	sync.RWMutex
-
-	parent *MainView
+	mainView *MainView
 }
 
 func NewHubView(mainView *MainView) *HubView {
-
-	// initialize hub
-	rstr := &HubView{
-		parent: mainView,
+	hubView := &HubView{
+		mainView: mainView,
 	}
 
-	return rstr
+	return hubView
 }
 
-func (hubView *HubView) Draw(screen mauview.Screen) {
-
-	titleStyle := tcell.StyleDefault.Foreground(tcell.ColorDefault).Bold(true)
-	widget.WriteLine(screen, mauview.AlignLeft, "GOMUKS", 2, 1, 0, titleStyle)
+func (view *HubView) SwitchRoom(room *rooms.Room) {
+	if room == nil {
+		return
+	}
 }
 
-func (hubView *HubView) OnKeyEvent(event mauview.KeyEvent) bool {
+func (view *HubView) Draw(screen mauview.Screen) {
+
+	view.mainView.roomView.Draw(screen)
+}
+
+func (view *HubView) OnKeyEvent(event mauview.KeyEvent) bool {
+
 	kb := config.Keybind{
 		Key: event.Key(),
 		Ch:  event.Rune(),
 		Mod: event.Modifiers(),
 	}
-
-	switch hubView.parent.config.Keybindings.Roster[kb] {
-	case "quit":
-		hubView.parent.gmx.Stop(true)
+	switch view.mainView.config.Keybindings.Main[kb] {
+	case "add_newline":
+		return view.mainView.roomView.OnKeyEvent(tcell.NewEventKey(tcell.KeyEnter, '\n', event.Modifiers()|tcell.ModShift))
 	default:
-		return false
+		goto defaultHandler
 	}
 	return true
+defaultHandler:
+	return view.mainView.roomView.OnKeyEvent(event)
 }
 
-func (hubView *HubView) OnMouseEvent(event mauview.MouseEvent) bool {
-	if event.HasMotion() {
-		return false
-	}
-
-	return false
+func (view *HubView) OnMouseEvent(event mauview.MouseEvent) bool {
+	return view.mainView.roomView.OnMouseEvent(event)
 }
+
+func (view *HubView) OnPasteEvent(event mauview.PasteEvent) bool {
+	return view.mainView.roomView.OnPasteEvent(event)
+}
+
+func (view *HubView) Focus() {
+}
+
+func (view *HubView) Blur() {
+}
+
