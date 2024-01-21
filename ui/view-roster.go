@@ -29,8 +29,6 @@ import (
 	"maunium.net/go/gomuks/matrix/rooms"
 	"maunium.net/go/gomuks/ui/widget"
 	"maunium.net/go/mautrix/event"
-
-	"maunium.net/go/gomuks/debug"
 )
 
 const beeperBridgeSuffix = ":beeper.local"
@@ -72,24 +70,16 @@ type RosterView struct {
 
 func NewRosterView(mainView *MainView) *RosterView {
 	splts := make([]*split, 0)
-
-	// Create default splits
-
-	// Favorites
 	splts = append(splts, &split{
 		name:  "Favorites",
 		tag:   "m.favourite",
 		rooms: make([]*rooms.Room, 0),
 	})
-
-	// Beeper native
 	splts = append(splts, &split{
-		name:  "Beeper",
+		name:  "Inbox",
 		tag:   "",
 		rooms: make([]*rooms.Room, 0),
 	})
-
-	// Low Priority
 	splts = append(splts, &split{
 		name:      "Low Priority",
 		tag:       "m.lowpriority",
@@ -97,14 +87,12 @@ func NewRosterView(mainView *MainView) *RosterView {
 		rooms:     make([]*rooms.Room, 0),
 	})
 
-	// initialize roster
 	rstr := &RosterView{
 		parent:      mainView,
 		splits:      splts,
 		splitLookup: make(map[string]*split, 0),
 	}
 
-	// Create split lookup table from each tag
 	for _, splt := range rstr.splits {
 		rstr.splitLookup[splt.tag] = splt
 	}
@@ -118,16 +106,13 @@ func (rstr *RosterView) splitForRoom(room *rooms.Room, create bool) *split {
 		return nil
 	}
 
-	// Rooms with a bridge ID should have a StateBridge event that has the bridge info
-	// Use this bridge info to get the split
 	if strings.HasSuffix(room.ID.String(), beeperBridgeSuffix) {
-		splt, sortByTag := rstr.splitForBridgeRoom(room, create)
+		splt, sortByTag := rstr.splitForDiscordAndSlackRooms(room, create)
 		if !sortByTag {
 			return splt
 		}
 	}
 
-	// Didn't find bridge split, split on first matching tag
 	for _, tag := range room.Tags() {
 		if splt, ok := rstr.splitLookup[tag.Tag]; ok {
 			return splt
@@ -137,68 +122,50 @@ func (rstr *RosterView) splitForRoom(room *rooms.Room, create bool) *split {
 	return nil
 }
 
-// splitForBridgeRoom returns the corresponding split for
-// passed bridged rooms. If the room is not bridged, it returns (nil, true).
+// splitForDiscordAndSlackRooms returns the corresponding split for
+// passed bridged rooms from the Discord and Slack networks. If the room
+// is not bridged, or is not from Discord or Slack, it returns (nil, true).
 // If the split does not yet exist, it is created.
-func (rstr *RosterView) splitForBridgeRoom(room *rooms.Room, create bool) (*split, bool) {
-
-	// Get last bridge event from state
+func (rstr *RosterView) splitForDiscordAndSlackRooms(room *rooms.Room, create bool) (*split, bool) {
 	bridgeEvent := room.MostRecentStateEventOfType(event.StateBridge)
 	if bridgeEvent == nil {
 		return nil, true
 	}
 
-	// Parse bridge event
 	if _, server, err := bridgeEvent.Sender.Parse(); err != nil || server != beeperBridgeSuffix[1:] {
 		return nil, true
 	}
 
-	// Get bridge information
 	content := bridgeEvent.Content
 	bridge := content.AsBridge()
+	if bridge.Protocol.DisplayName != "Discord" && bridge.Protocol.DisplayName != "Slack" {
+		return nil, true
+	}
 
-	// Get split name and tag from bridge information
-	var splitName, splitTag string
-
-	// Split on bridge network
-	if bridge.Network != nil {
-		splitName = bridge.Network.DisplayName
-		splitTag = bridge.Network.ID
-
-	// Split on bridge protocol
-	} else {
-		
-		// Special case Discord
+	if bridge.Network == nil {
+		// Need to check account data for "show in inbox" settings, which
+		// govern the display of DMs.
 		if _, ok := content.Raw["com.beeper.room_type"]; ok && bridge.Protocol.DisplayName == "Discord" {
-		
-			// Need to check account data for "show in inbox" settings, which
-			// govern the display of DMs.
-			splitTag = "Discord DMs"
-			splitName = "discord-dms"
-
-		// General bridge protocol
+			bridge.Network = &event.BridgeInfoSection{
+				ID:          "discord-dms",
+				DisplayName: "Discord DMs",
+			}
 		} else {
-			splitName = bridge.Protocol.DisplayName
-			splitTag = bridge.Protocol.ID
+			return nil, true
 		}
 	}
 
-	// Look up split from ID
-	if splt, ok := rstr.splitLookup[splitTag]; ok {
+	if splt, ok := rstr.splitLookup[bridge.Network.ID]; ok {
 		return splt, false
 	}
 
-	// Didnt find the split, create new one
 	if create {
-		debug.Print("Creating new split for", splitName, splitTag)
 		splt := &split{
-			name:      splitName,
-			tag:       splitTag,
+			name:      bridge.Network.DisplayName,
+			tag:       bridge.Network.ID,
 			collapsed: true,
 			rooms:     make([]*rooms.Room, 0),
 		}
-
-		// Add to list of splits and lookup table
 		rstr.splits = append(rstr.splits, splt)
 		rstr.splitLookup[splt.tag] = splt
 		return splt, false
@@ -220,7 +187,6 @@ func (rstr *RosterView) Add(room *rooms.Room) {
 		return
 	}
 
-	// TODO: automatically sorted by date
 	insertAt := len(splt.rooms)
 	for i := 0; i < len(splt.rooms); i++ {
 		if splt.rooms[i] == room {
@@ -432,24 +398,33 @@ func (rstr *RosterView) Draw(screen mauview.Screen) {
 
 	rstr.width, rstr.height = screen.Size()
 
-	// Start rendering at top of screen
-	y := 0
+	titleStyle := tcell.StyleDefault.Foreground(tcell.ColorDefault).Bold(true)
+	mainStyle := titleStyle.Bold(false)
 
-	// Render all splits
+	now := time.Now()
+	tm := now.Format("15:04")
+	tmX := rstr.width - 3 - len(tm)
+
+	// first line
+	widget.WriteLine(screen, mauview.AlignLeft, "GOMUKS", 2, 1, tmX, titleStyle)
+	widget.WriteLine(screen, mauview.AlignLeft, tm, tmX, 1, 2+len(tm), titleStyle)
+	// second line
+	widget.WriteLine(screen, mauview.AlignRight, now.Format("Mon, Jan 02"), 0, 2, rstr.width-3, mainStyle)
+	// third line
+	widget.NewBorder().Draw(mauview.NewProxyScreen(screen, 2, 3, rstr.width-5, 1))
+
+	y := 4
 	for _, splt := range rstr.splits[rstr.splitOffset:] {
 
-		// Don't show empty rooms
 		if len(splt.rooms) == 0 {
 			continue
 		}
 
-		// Split header
 		name := splt.title(splt == rstr.split)
 		halfWidth := (rstr.width - 5 - len(name)) / 2
 		widget.WriteLineColor(screen, mauview.AlignCenter, name, halfWidth, y, halfWidth, tcell.ColorGray)
 		y++
 
-		// Don't render collapsed
 		if splt.collapsed {
 			continue
 		}
@@ -459,22 +434,18 @@ func (rstr *RosterView) Draw(screen mauview.Screen) {
 			iter = iter[rstr.roomOffset:]
 		}
 
-		// Render room contents
 		for _, room := range iter {
 			if room.IsReplaced() {
 				continue
 			}
 
-			// Entry of height 2
 			renderHeight := 2
 			if y+renderHeight >= rstr.height {
 				renderHeight = rstr.height - y
 			}
 
-			// Determine if selected
 			isSelected := room == rstr.room
 
-			// Change style based on selected
 			style := tcell.StyleDefault.
 				Foreground(tcell.ColorDefault).
 				Bold(room.HasNewMessages())
@@ -485,7 +456,6 @@ func (rstr *RosterView) Draw(screen mauview.Screen) {
 					Italic(true)
 			}
 
-			// Format timestamp
 			timestamp := room.LastReceivedMessage
 			tm := timestamp.Format("15:04")
 			now := time.Now()
@@ -498,7 +468,6 @@ func (rstr *RosterView) Draw(screen mauview.Screen) {
 				}
 			}
 
-			// Format last message preview
 			lastMessage, received := rstr.getMostRecentMessage(room)
 			msgStyle := style.Foreground(tcell.ColorGray).Italic(!received)
 			startingX := 2
@@ -511,11 +480,10 @@ func (rstr *RosterView) Draw(screen mauview.Screen) {
 				widget.WriteLine(screen, mauview.AlignLeft, string(tcell.RuneDiamond)+" ", 2, y, 4, style)
 			}
 
-			// Write message row
 			tmX := rstr.width - 3 - len(tm)
 			widget.WriteLinePadded(screen, mauview.AlignLeft, room.GetTitle(), startingX, y, tmX, style)
 			widget.WriteLine(screen, mauview.AlignLeft, tm, tmX, y, startingX+len(tm), style)
-			widget.WriteLinePadded(screen, mauview.AlignLeft, lastMessage, 4, y+1, rstr.width-7, msgStyle)
+			widget.WriteLinePadded(screen, mauview.AlignLeft, lastMessage, 2, y+1, rstr.width-5, msgStyle)
 
 			y += renderHeight
 			if y >= rstr.height {

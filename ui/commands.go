@@ -909,17 +909,6 @@ func cmdSetState(cmd *Command) {
 }
 
 func cmdEscape(cmd *Command) {
-	if cmd.Config.Preferences.DisplayMode != config.DisplayModeModern {
-		cmd.Reply("/escape can only be used in the modern display mode")
-		return
-	}
-	if cmd.MainView.rosterView.room == nil || !cmd.MainView.rosterView.focused {
-		cmd.Reply("/escape is used to exit from an open room (no room opened)")
-		return
-	}
-	cmd.MainView.rosterView.focused = false
-	cmd.MainView.rosterView.split = nil
-	cmd.MainView.rosterView.room = nil
 	cmd.UI.Render()
 }
 
@@ -1058,12 +1047,15 @@ func cmdToggle(cmd *Command) {
 			continue
 		case "displaymode":
 			switch cmd.Config.Preferences.DisplayMode {
+			case "hub":
+				cmd.Config.Preferences.DisplayMode = config.DisplayModeHub
+				cmd.Reply("Enabled hub display mode.")
 			case "modern":
-				cmd.Config.Preferences.DisplayMode = config.DisplayModeIRC
-				cmd.Reply("Enabled IRC display mode.")
-			default:
 				cmd.Config.Preferences.DisplayMode = config.DisplayModeModern
 				cmd.Reply("Enabled modern display mode.")
+			default:
+				cmd.Config.Preferences.DisplayMode = config.DisplayModeIRC
+				cmd.Reply("Enabled IRC display mode.")
 			}
 			continue
 		case "newline":

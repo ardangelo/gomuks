@@ -277,6 +277,7 @@ const (
 )
 
 func (view *RoomView) Draw(screen mauview.Screen) {
+
 	width, height := screen.Size()
 	if width <= 0 || height <= 0 {
 		return
@@ -305,7 +306,7 @@ func (view *RoomView) Draw(screen mauview.Screen) {
 		contentWidth = width
 	}
 
-	if view.config.Preferences.DisplayMode == config.DisplayModeModern {
+	if view.parent.compactMode {
 		view.topicScreen.Height = 2
 		view.contentScreen.OffsetY = 2
 		contentHeight--
