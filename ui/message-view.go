@@ -159,8 +159,7 @@ func (view *MessageView) AddMessage(ifcMessage ifc.Message, direction MessageDir
 
 	width := view.width()
 	bare := view.config.Preferences.BareMessageView
-	modern := view.config.Preferences.DisplayMode == config.DisplayModeModern
-	if modern {
+	if view.compactMode() {
 		width -= 5
 	} else if !bare {
 		width -= view.widestSender() + SenderMessageGap
@@ -180,7 +179,7 @@ func (view *MessageView) AddMessage(ifcMessage ifc.Message, direction MessageDir
 
 	if direction == AppendMessage {
 		if view.ScrollOffset > 0 {
-			view.ScrollOffset += message.Height(view.showModernHeader(message))
+			view.ScrollOffset += message.Height(view.drawCompactHeader(message))
 		}
 		view.messagesLock.Lock()
 		if len(view.messages) > 0 && !view.messages[len(view.messages)-1].SameDate(message) {
@@ -254,8 +253,12 @@ func (view *MessageView) setMessageID(message *messages.UIMessage) {
 	view.messageIDLock.Unlock()
 }
 
-func (view *MessageView) showModernHeader(message *messages.UIMessage) bool {
-	if view.config.Preferences.DisplayMode != config.DisplayModeModern {
+func (view *MessageView) compactMode() bool {
+	return view.parent.parent.compactMode
+}
+
+func (view *MessageView) drawCompactHeader(message *messages.UIMessage) bool {
+	if !view.parent.parent.compactMode {
 		return false
 	}
 	if message.IsService {
@@ -272,7 +275,7 @@ func (view *MessageView) appendBuffer(message *messages.UIMessage) {
 }
 
 func (view *MessageView) appendBufferUnlocked(message *messages.UIMessage) {
-	for i := 0; i < message.Height(view.showModernHeader(message)); i++ {
+	for i := 0; i < message.Height(view.drawCompactHeader(message)); i++ {
 		view.msgBuffer = append(view.msgBuffer, message)
 	}
 	view.prevMsgCount++
@@ -305,13 +308,13 @@ func (view *MessageView) replaceBuffer(original *messages.UIMessage, new *messag
 		end++
 	}
 
-	if new.Height(view.showModernHeader(new)) == 0 {
+	if new.Height(view.drawCompactHeader(new)) == 0 {
 		new.CalculateBuffer(view.prevPrefs, view.prevWidth())
 	}
 
 	view.msgBufferLock.Lock()
-	if new.Height(view.showModernHeader(new)) != end-start {
-		height := new.Height(view.showModernHeader(new))
+	if new.Height(view.drawCompactHeader(new)) != end-start {
+		height := new.Height(view.drawCompactHeader(new))
 
 		newBuffer := make([]*messages.UIMessage, height+len(view.msgBuffer)-end)
 		for i := 0; i < height; i++ {
@@ -339,7 +342,7 @@ func (view *MessageView) recalculateBuffers() {
 	view.msgBufferLock.Lock()
 	if recalculateMessageBuffers || len(view.messages) != view.prevMsgCount {
 		width := view.width()
-		if prefs.DisplayMode == config.DisplayModeModern {
+		if view.compactMode() {
 			width -= 5
 		} else if !prefs.BareMessageView {
 			width -= view.widestSender() + SenderMessageGap
@@ -457,7 +460,7 @@ func (view *MessageView) OnMouseEvent(event mauview.MouseEvent) bool {
 		}
 		view.msgBufferLock.RUnlock()
 
-		if view.config.Preferences.DisplayMode == config.DisplayModeModern {
+		if view.compactMode() {
 			if prevMessage == message {
 				return view.handleMessageClick(message, event.Modifiers())
 			} else {
@@ -625,6 +628,8 @@ func (view *MessageView) CapturePlaintext(height int) string {
 }
 
 func (view *MessageView) Draw(screen mauview.Screen) {
+
+	// Resize view to fill the screen
 	view.setSize(screen.Size())
 	view.recalculateBuffers()
 
@@ -640,9 +645,9 @@ func (view *MessageView) Draw(screen mauview.Screen) {
 	}
 	messageX := usernameX + view.widestSender() + SenderMessageGap
 
-	noLeftPad := view.config.Preferences.BareMessageView || view.config.Preferences.DisplayMode == config.DisplayModeModern
+	noLeftPad := view.config.Preferences.BareMessageView || view.compactMode()
 	if noLeftPad {
-		if view.config.Preferences.DisplayMode == config.DisplayModeModern {
+		if view.compactMode() {
 			messageX = 2
 		} else {
 			messageX = 0
@@ -677,7 +682,7 @@ func (view *MessageView) Draw(screen mauview.Screen) {
 		index := indexOffset + line
 
 		msg := view.msgBuffer[index]
-		header := view.showModernHeader(msg)
+		header := view.drawCompactHeader(msg)
 
 		if msg == prevMsg {
 			debug.Print("Unexpected re-encounter of", msg, msg.Height(header), "at", line, index)
@@ -685,7 +690,7 @@ func (view *MessageView) Draw(screen mauview.Screen) {
 			continue
 		}
 
-		if view.config.Preferences.DisplayMode != config.DisplayModeModern {
+		if !view.compactMode() {
 			if len(msg.FormatTime()) > 0 && !view.config.Preferences.HideTimestamp {
 				widget.WriteLineSimpleColor(screen, msg.FormatTime(), 0, line, msg.TimestampColor())
 			}

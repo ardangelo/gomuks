@@ -105,7 +105,7 @@ func NewRoomView(parent *MainView, room *rooms.Room) *RoomView {
 		ulScreen:       &mauview.ProxyScreen{OffsetY: StatusBarHeight, Width: UserListWidth},
 
 		userListLoaded: false,
-		userListVisible: true,
+		userListVisible: false,
 		userListOverlay: true,
 
 		parent: parent,
@@ -899,9 +899,12 @@ func (view *RoomView) MxRoom() *rooms.Room {
 }
 
 func (view *RoomView) Update() {
+
+	// Get topic string
 	topicStr := strings.TrimSpace(strings.ReplaceAll(view.Room.GetTopic(), "\n", " "))
-	if view.config.Preferences.DisplayMode == config.DisplayModeModern {
+	if view.parent.compactMode {
 		topicStr = view.Room.GetTitle()
+
 	} else if view.config.Preferences.HideRoomList {
 		if len(topicStr) > 0 {
 			topicStr = fmt.Sprintf("%s - %s", view.Room.GetTitle(), topicStr)
