@@ -17,10 +17,6 @@
 package ui
 
 import (
-	"math"
-
-	"github.com/mattn/go-runewidth"
-
 	"go.mau.fi/mauview"
 	"go.mau.fi/tcell"
 
@@ -36,18 +32,20 @@ type LoginView struct {
 	*mauview.Form
 
 	container *mauview.Centerer
+	box *mauview.Box
 
 	emailLabel *mauview.TextField
-	codeLabel  *mauview.TextField
-
 	email *mauview.InputField
+	requestCodeButton *mauview.Button
+
+	codeLabel  *mauview.TextField
 	code  *mauview.InputField
+
 	error *mauview.TextView
 
 	loginButton *mauview.Button
 	quitButton  *mauview.Button
 
-	loading bool
 	session string
 
 	matrix ifc.MatrixContainer
@@ -60,12 +58,13 @@ func (ui *GomuksUI) NewLoginView() mauview.Component {
 		Form: mauview.NewForm(),
 
 		emailLabel: mauview.NewTextField().SetText("Email"),
-		codeLabel:  mauview.NewTextField().SetText("Code"),
-
 		email: mauview.NewInputField(),
+		requestCodeButton: mauview.NewButton("Enter email to request code"),
+
+		codeLabel:  mauview.NewTextField().SetText("Code"),
 		code:  mauview.NewInputField(),
 
-		loginButton: mauview.NewButton("Login"),
+		loginButton: mauview.NewButton("Enter code to log in"),
 		quitButton:  mauview.NewButton("Quit"),
 
 		matrix: ui.gmx.Matrix(),
@@ -73,41 +72,48 @@ func (ui *GomuksUI) NewLoginView() mauview.Component {
 		parent: ui,
 	}
 
-	view.email.SetPlaceholder("example@example.com").SetTextColor(tcell.ColorWhite)
-	view.code.SetPlaceholder("123456").SetTextColor(tcell.ColorWhite)
+	view.email.SetPlaceholder("example@example.com").
+		SetTextColor(tcell.ColorWhite).
+		SetChangedFunc(view.emailChanged)
+	view.code.SetPlaceholder("123456").
+		SetTextColor(tcell.ColorWhite).
+		SetChangedFunc(view.codeChanged)
 
-	view.quitButton.
-		SetOnClick(func() { ui.gmx.Stop(true) }).
+	view.requestCodeButton.
 		SetBackgroundColor(tcell.ColorDarkCyan).
 		SetForegroundColor(tcell.ColorWhite).
 		SetFocusedForegroundColor(tcell.ColorWhite)
 	view.loginButton.
-		SetOnClick(view.Login).
+		SetBackgroundColor(tcell.ColorDarkCyan).
+		SetForegroundColor(tcell.ColorWhite).
+		SetFocusedForegroundColor(tcell.ColorWhite)
+	view.quitButton.
+		SetOnClick(func() { ui.gmx.Stop(true) }).
 		SetBackgroundColor(tcell.ColorDarkCyan).
 		SetForegroundColor(tcell.ColorWhite).
 		SetFocusedForegroundColor(tcell.ColorWhite)
 
 	view.
 		SetColumns([]int{1, 5, 1, 30, 1}).
-		SetRows([]int{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1})
+		SetRows([]int{1, 1, 1, 1, 1, 1, 1, 1, 1})
 	view.
 		AddFormItem(view.email, 3, 1, 1, 1).
-		AddFormItem(view.code, 3, 3, 1, 1).
-		AddFormItem(view.loginButton, 1, 5, 3, 1).
-		AddFormItem(view.quitButton, 1, 7, 3, 1).
+		AddFormItem(view.requestCodeButton, 3, 3, 1, 1).
+		AddFormItem(view.code, 3, 5, 1, 1).
+		AddFormItem(view.loginButton, 1, 7, 3, 1).
+		AddFormItem(view.quitButton, 1, 9, 3, 1).
 		AddComponent(view.emailLabel, 1, 1, 1, 1).
-		AddComponent(view.codeLabel, 1, 3, 1, 1)
-	view.SetOnFocusChanged(view.focusChanged)
+		AddComponent(view.codeLabel, 1, 5, 1, 1)
 	view.FocusNextItem()
 	ui.loginView = view
 
-	view.container = mauview.Center(mauview.NewBox(view).SetTitle("Log in to Matrix"), 40, 11)
+	view.box = mauview.NewBox(view).SetTitle("Log in to Matrix")
+	view.container = mauview.Center(view.box, 40, 12)
 	view.container.SetAlwaysFocusChild(true)
 	return view.container
 }
 
 func (view *LoginView) emailAuthFlow() {
-	view.Error("")
 
 	resp, err := beeper.StartLogin()
 	if err != nil {
@@ -115,7 +121,8 @@ func (view *LoginView) emailAuthFlow() {
 		view.Error(err.Error())
 		return
 	}
-	view.code.SetPlaceholder("Talking to Beeper servers…")
+
+	view.requestCodeButton.SetText("Sending request")
 	view.parent.Render()
 
 	err = beeper.SendLoginEmail(resp.RequestID, view.email.GetText())
@@ -126,33 +133,40 @@ func (view *LoginView) emailAuthFlow() {
 		return
 	}
 	view.session = resp.RequestID
-	view.code.SetPlaceholder("Check your inbox…")
+
+	view.requestCodeButton.SetText("Check email for code")
 	view.parent.Render()
 }
 
-func (view *LoginView) focusChanged(from, to mauview.Component) {
-	if from == view.email {
-		go view.emailAuthFlow()
+func (view *LoginView) emailChanged(to string) {
+	var emailFilled = len(view.email.GetText()) > 0
+
+	if emailFilled {
+		view.requestCodeButton.SetText("Request code").
+			SetOnClick(view.emailAuthFlow)
+	} else {
+		view.requestCodeButton.SetText("Enter email to request code").
+			SetOnClick(nil)
+	}
+}
+
+func (view *LoginView) codeChanged(to string) {
+	var codeFilled = len(to) > 0
+
+	if codeFilled {
+		view.loginButton.SetText("Login").
+			SetOnClick(view.Login)
+	} else {
+		view.loginButton.SetText("Enter code to log in").
+			SetOnClick(nil)
 	}
 }
 
 func (view *LoginView) Error(err string) {
-	if len(err) == 0 && view.error != nil {
-		debug.Print("Hiding error")
-		view.RemoveComponent(view.error)
-		view.container.SetHeight(11)
-		view.SetRows([]int{1, 1, 1, 1, 1, 1, 1, 1, 1})
-		view.error = nil
-	} else if len(err) > 0 {
-		debug.Print("Showing error", err)
-		if view.error == nil {
-			view.error = mauview.NewTextView().SetTextColor(tcell.ColorRed)
-			view.AddComponent(view.error, 1, 9, 3, 1)
-		}
-		view.error.SetText(err)
-		errorHeight := int(math.Ceil(float64(runewidth.StringWidth(err)) / 41))
-		view.container.SetHeight(12 + errorHeight)
-		view.SetRow(11, errorHeight)
+	if len(err) > 0 {
+		view.box.SetTitle(err)
+	} else {
+		view.box.SetTitle("Log in to Matrix")
 	}
 
 	view.parent.Render()
@@ -165,31 +179,46 @@ func (view *LoginView) actuallyLogin(session, code string) {
 	if err := view.matrix.InitClient(false); err != nil {
 		debug.Print("Init error:", err)
 		view.Error(err.Error())
+
 	} else if err = view.matrix.BeeperLogin(session, code); err != nil {
+		debug.Print("Login error:", err)
+
 		if httpErr, ok := err.(mautrix.HTTPError); ok {
-			if httpErr.RespError != nil && len(httpErr.RespError.Err) > 0 {
+
+			// Known status codes
+			if httpErr.IsStatus(400) {
+				view.Error("Beeper: invalid email")
+
+			} else if httpErr.IsStatus(404) {
+				view.Error("Beeper: unknown email")
+
+			} else if httpErr.IsStatus(429) {
+				view.Error("Beeper: too many req's")
+
+			// Other status codes
+			} else if httpErr.RespError == nil {
 				view.Error(httpErr.RespError.Err)
+
+			// General errors
 			} else if len(httpErr.Message) > 0 {
 				view.Error(httpErr.Message)
 			} else {
 				view.Error(err.Error())
 			}
+
 		} else {
 			view.Error(err.Error())
 		}
-		debug.Print("Login error:", err)
 	}
-	view.loading = false
-	view.loginButton.SetText("Login")
+
+	view.loginButton.SetText("Login").
+		SetOnClick(view.Login)
 }
 
 func (view *LoginView) Login() {
-	if view.loading {
-		return
-	}
 	code := view.code.GetText()
 
-	view.loading = true
-	view.loginButton.SetText("Logging in...")
+	view.loginButton.SetText("Logging in...").
+		SetOnClick(nil)
 	go view.actuallyLogin(view.session, code)
 }
