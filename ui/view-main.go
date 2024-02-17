@@ -36,7 +36,7 @@ import (
 	ifc "maunium.net/go/gomuks/interface"
 	"maunium.net/go/gomuks/lib/notification"
 	"maunium.net/go/gomuks/matrix/rooms"
-	"maunium.net/go/gomuks/ui/beepberry"
+	"maunium.net/go/gomuks/ui/beepy"
 	"maunium.net/go/gomuks/ui/messages"
 	"maunium.net/go/gomuks/ui/widget"
 )
@@ -57,7 +57,7 @@ type MainView struct {
 
 	lastFocusTime time.Time
 
-	led     *beepberry.LED
+	led     *beepy.LED
 	ledLock sync.RWMutex
 
 	matrix ifc.MatrixContainer
@@ -81,7 +81,7 @@ func (ui *GomuksUI) NewMainView() mauview.Component {
 	mainView.rosterView = NewRosterView(mainView)
 	mainView.cmdProcessor = NewCommandProcessor(mainView)
 
-	if led, err := beepberry.NewLED(); err == nil {
+	if led, err := beepy.NewLED(); err == nil {
 		mainView.led = led
 	}
 

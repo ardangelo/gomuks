@@ -1,4 +1,4 @@
-package beepberry
+package beepy
 
 import (
 	"periph.io/x/conn/v3/i2c"
