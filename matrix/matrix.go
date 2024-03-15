@@ -156,28 +156,6 @@ func (c *Container) InitClient(isStartup bool) error {
 		}
 	}
 
-	if !SkipVersionCheck && (!isStartup || len(c.client.AccessToken) > 0) {
-		debug.Printf("Checking versions that %s supports", c.client.HomeserverURL)
-		resp, err := c.client.Versions()
-		if err != nil {
-			debug.Print("Error checking supported versions:", err)
-			return fmt.Errorf("failed to check server versions: %w", err)
-		} else if !resp.ContainsGreaterOrEqual(MinSpecVersion) {
-			debug.Print("Server doesn't support modern spec versions")
-			bestVersionStr := "nothing"
-			bestVersion := mautrix.MustParseSpecVersion("r0.0.0")
-			for _, ver := range resp.Versions {
-				if ver.GreaterThan(bestVersion) {
-					bestVersion = ver
-					bestVersionStr = ver.String()
-				}
-			}
-			return fmt.Errorf("%w (it only supports %s, while gomuks requires %s)", ErrServerOutdated, bestVersionStr, MinSpecVersion.String())
-		} else {
-			debug.Print("Server supports modern spec versions")
-		}
-	}
-
 	c.stop = make(chan bool, 1)
 
 	if len(accessToken) > 0 && !c.headless {
@@ -483,6 +461,7 @@ func (c *Container) ProcessSyncResponse(res *mautrix.RespSync, since string) err
 
 // OnLogin initializes the syncer and updates the room list.
 func (c *Container) OnLogin() {
+
 	c.cryptoOnLogin()
 	c.ui.OnLogin()
 
@@ -512,6 +491,27 @@ func (c *Container) Start() {
 	defer debug.Recover()
 
 	c.OnLogin()
+
+	if !SkipVersionCheck && len(c.client.AccessToken) > 0 {
+		debug.Printf("Checking versions that %s supports", c.client.HomeserverURL)
+		resp, err := c.client.Versions()
+		if err != nil {
+			debug.Print("Error checking supported versions:", err)
+		} else if !resp.ContainsGreaterOrEqual(MinSpecVersion) {
+			debug.Print("Server doesn't support modern spec versions")
+			bestVersionStr := "nothing"
+			bestVersion := mautrix.MustParseSpecVersion("r0.0.0")
+			for _, ver := range resp.Versions {
+				if ver.GreaterThan(bestVersion) {
+					bestVersion = ver
+					bestVersionStr = ver.String()
+				}
+			}
+			debug.Print("%w (it only supports %s, while gomuks requires %s)", ErrServerOutdated, bestVersionStr, MinSpecVersion.String())
+		} else {
+			debug.Print("Server supports modern spec versions")
+		}
+	}
 
 	if c.client == nil {
 		return
