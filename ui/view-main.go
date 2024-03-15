@@ -38,6 +38,8 @@ import (
 	"maunium.net/go/gomuks/matrix/rooms"
 	"maunium.net/go/gomuks/ui/beepberry"
 	"maunium.net/go/gomuks/ui/messages"
+
+	"maunium.net/go/gomuks/ui/widget"
 )
 
 type MainView struct {
@@ -46,10 +48,11 @@ type MainView struct {
 
 	// Views
 	modal mauview.Component
+	flex *mauview.Flex
+
+	// Subviews
 	roomView     *mauview.Box
 	roomListView *RoomList
-	fullView     *FullView
-	hubView      *HubView
 
 	// Room control
 	currentRoom  *RoomView
@@ -79,6 +82,8 @@ func (ui *GomuksUI) NewMainView() mauview.Component {
 	mainView := &MainView{
 		compactMode : true,
 
+		flex: mauview.NewFlex().SetDirection(mauview.FlexColumn),
+
 		roomView: mauview.NewBox(nil).SetBorder(false),
 
 		rooms:    make(map[id.RoomID]*RoomView),
@@ -89,8 +94,6 @@ func (ui *GomuksUI) NewMainView() mauview.Component {
 		parent: ui,
 	}
 	mainView.roomListView = NewRoomList(mainView)
-	mainView.fullView = NewFullView(mainView)
-	mainView.hubView = NewHubView(mainView)
 	mainView.cmdProcessor = NewCommandProcessor(mainView)
 
 	if led, err := beepberry.NewLED(); err == nil {
@@ -139,14 +142,30 @@ func (view *MainView) HideModal() {
 	view.focused = view.roomView
 }
 
+var oldWidth = 0
 func (view *MainView) Draw(screen mauview.Screen) {
 
-	if view.compactMode {
-		view.hubView.Draw(screen)
-	} else {
-		view.fullView.Draw(screen)
+	// TODO: reflow handler?
+	width, _ := screen.Size()
+	if width != oldWidth {
+		oldWidth = width
+
+		view.flex = mauview.NewFlex().SetDirection(mauview.FlexColumn)
+
+		if !view.config.Preferences.HideRoomList {
+			view.flex.AddFixedComponent(view.roomListView, 25).
+				AddFixedComponent(widget.NewBorder(), 1)
+		}
+
+		if width > 40 {
+			view.flex.AddProportionalComponent(view.roomView, 1)
+		}
 	}
 
+	// Draw entire flex view
+	view.flex.Draw(screen)
+
+	// Draw modal last
 	if view.modal != nil {
 		view.modal.Draw(screen)
 	}
@@ -228,25 +247,22 @@ func (view *MainView) OnKeyEvent(event mauview.KeyEvent) bool {
 		msgView.AddScrollOffset(-msgView.TotalHeight())
 	case "add_newline":
 		newlineEvent := tcell.NewEventKey(tcell.KeyEnter, '\n', event.Modifiers()|tcell.ModShift)
-		if view.compactMode {
-			return view.hubView.OnKeyEvent(newlineEvent)
-		} else {
-			return view.fullView.OnKeyEvent(newlineEvent)
-		}
+		return view.flex.OnKeyEvent(newlineEvent)
 	case "next_active_room":
 		view.SwitchRoom(view.roomListView.NextWithActivity())
 	case "show_bare":
 		view.ShowBare(view.currentRoom)
+	case "toggle_rooms":
+		view.config.Preferences.HideRoomList = !view.config.Preferences.HideRoomList
+		view.parent.Render()
+	case "quit":
+		view.gmx.Stop(true)
 	default:
 		goto defaultHandler
 	}
 	return true
 defaultHandler:
-	if view.compactMode {
-		return view.hubView.OnKeyEvent(event)
-	} else {
-		return view.fullView.OnKeyEvent(event)
-	}
+	return view.flex.OnKeyEvent(event)
 }
 
 const WheelScrollOffsetDiff = 3
@@ -258,7 +274,7 @@ func (view *MainView) OnMouseEvent(event mauview.MouseEvent) bool {
 	if view.config.Preferences.HideRoomList {
 		return view.roomView.OnMouseEvent(event)
 	}
-	return view.fullView.OnMouseEvent(event)
+	return view.flex.OnMouseEvent(event)
 }
 
 func (view *MainView) OnPasteEvent(event mauview.PasteEvent) bool {
@@ -267,7 +283,7 @@ func (view *MainView) OnPasteEvent(event mauview.PasteEvent) bool {
 	} else if view.config.Preferences.HideRoomList {
 		return view.roomView.OnPasteEvent(event)
 	}
-	return view.fullView.OnPasteEvent(event)
+	return view.flex.OnPasteEvent(event)
 }
 
 func (view *MainView) Focus() {
@@ -303,12 +319,6 @@ func (view *MainView) switchRoom(tag string, room *rooms.Room, lock bool) {
 	view.currentRoom = roomView
 	view.MarkRead(roomView)
 	view.roomListView.SetSelected(tag, room)
-
-	if (view.compactMode) {
-		view.hubView.SwitchRoom(room)
-	} else {
-		view.fullView.SwitchRoom(room)
-	}
 
 	view.focused = view.roomView
 	view.roomView.Focus()
