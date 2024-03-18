@@ -44,7 +44,6 @@ import (
 	"maunium.net/go/mautrix/format"
 	"maunium.net/go/mautrix/id"
 
-	"maunium.net/go/gomuks/config"
 	"maunium.net/go/gomuks/debug"
 	"maunium.net/go/gomuks/lib/filepicker"
 )
@@ -1009,8 +1008,6 @@ func cmdToggle(cmd *Command) {
 	for _, thing := range cmd.Args {
 		var val *bool
 		switch thing {
-		case "rooms":
-			val = &cmd.Config.Preferences.HideRoomList
 		case "users":
 			val = &cmd.Config.Preferences.HideUserList
 		case "timestamps":
@@ -1043,19 +1040,6 @@ func cmdToggle(cmd *Command) {
 			default:
 				cmd.Config.Preferences.InlineURLMode = "enable"
 				cmd.Reply("Force-enabled using fancy terminal features to render URLs inside text. Restart gomuks to apply changes.")
-			}
-			continue
-		case "displaymode":
-			switch cmd.Config.Preferences.DisplayMode {
-			case "hub":
-				cmd.Config.Preferences.DisplayMode = config.DisplayModeHub
-				cmd.Reply("Enabled hub display mode.")
-			case "modern":
-				cmd.Config.Preferences.DisplayMode = config.DisplayModeModern
-				cmd.Reply("Enabled modern display mode.")
-			default:
-				cmd.Config.Preferences.DisplayMode = config.DisplayModeIRC
-				cmd.Reply("Enabled IRC display mode.")
 			}
 			continue
 		case "newline":

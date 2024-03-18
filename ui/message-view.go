@@ -159,7 +159,7 @@ func (view *MessageView) AddMessage(ifcMessage ifc.Message, direction MessageDir
 
 	width := view.width()
 	bare := view.config.Preferences.BareMessageView
-	if view.compactMode() {
+	if view.parent.parent.CompactMode() {
 		width -= 5
 	} else if !bare {
 		width -= view.widestSender() + SenderMessageGap
@@ -253,12 +253,8 @@ func (view *MessageView) setMessageID(message *messages.UIMessage) {
 	view.messageIDLock.Unlock()
 }
 
-func (view *MessageView) compactMode() bool {
-	return view.parent.parent.compactMode
-}
-
 func (view *MessageView) drawCompactHeader(message *messages.UIMessage) bool {
-	if !view.parent.parent.compactMode {
+	if !view.parent.parent.CompactMode() {
 		return false
 	}
 	if message.IsService {
@@ -342,7 +338,7 @@ func (view *MessageView) recalculateBuffers() {
 	view.msgBufferLock.Lock()
 	if recalculateMessageBuffers || len(view.messages) != view.prevMsgCount {
 		width := view.width()
-		if view.compactMode() {
+		if view.parent.parent.CompactMode() {
 			width -= 5
 		} else if !prefs.BareMessageView {
 			width -= view.widestSender() + SenderMessageGap
@@ -460,7 +456,7 @@ func (view *MessageView) OnMouseEvent(event mauview.MouseEvent) bool {
 		}
 		view.msgBufferLock.RUnlock()
 
-		if view.compactMode() {
+		if view.parent.parent.CompactMode() {
 			if prevMessage == message {
 				return view.handleMessageClick(message, event.Modifiers())
 			} else {
@@ -645,9 +641,9 @@ func (view *MessageView) Draw(screen mauview.Screen) {
 	}
 	messageX := usernameX + view.widestSender() + SenderMessageGap
 
-	noLeftPad := view.config.Preferences.BareMessageView || view.compactMode()
+	noLeftPad := view.config.Preferences.BareMessageView || view.parent.parent.CompactMode()
 	if noLeftPad {
-		if view.compactMode() {
+		if view.parent.parent.CompactMode() {
 			messageX = 2
 		} else {
 			messageX = 0
@@ -690,7 +686,7 @@ func (view *MessageView) Draw(screen mauview.Screen) {
 			continue
 		}
 
-		if !view.compactMode() {
+		if !view.parent.parent.CompactMode() {
 			if len(msg.FormatTime()) > 0 && !view.config.Preferences.HideTimestamp {
 				widget.WriteLineSimpleColor(screen, msg.FormatTime(), 0, line, msg.TimestampColor())
 			}

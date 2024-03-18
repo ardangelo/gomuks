@@ -48,7 +48,6 @@ type AuthCache struct {
 
 type UserPreferences struct {
 	HideUserList         bool `yaml:"hide_user_list"`
-	HideRoomList         bool `yaml:"hide_room_list"`
 	HideTimestamp        bool `yaml:"hide_timestamp"`
 	BareMessageView      bool `yaml:"bare_message_view"`
 	DisableImages        bool `yaml:"disable_images"`
@@ -63,7 +62,7 @@ type UserPreferences struct {
 
 	InlineURLMode string `yaml:"inline_url_mode"`
 
-	DisplayMode DisplayMode `yaml:"display_mode"`
+	CompactWidth int `yaml:"compact_width"`
 }
 
 var InlineURLsProbablySupported bool
@@ -90,18 +89,16 @@ type Keybind struct {
 
 type ParsedKeybindings struct {
 	Main   map[Keybind]string
-	Roster map[Keybind]string
 	Room   map[Keybind]string
+	RoomList map[Keybind]string
 	Modal  map[Keybind]string
-	Visual map[Keybind]string
 }
 
 type RawKeybindings struct {
-	Main   map[string]string `yaml:"main,omitempty"`
-	Roster map[string]string `yaml:"roster,omitempty"`
+	Main  map[string]string `yaml:"main,omitempty"`
+	RoomList map[string]string `yaml:"room_list,omitempty"`
 	Room   map[string]string `yaml:"room,omitempty"`
 	Modal  map[string]string `yaml:"modal,omitempty"`
-	Visual map[string]string `yaml:"visual,omitempty"`
 }
 
 // Config contains the main config of gomuks.
@@ -159,6 +156,10 @@ func NewConfig(configDir, dataDir, cacheDir, downloadDir string) *Config {
 		SendToVerifiedOnly:    false,
 		Backspace1RemovesWord: true,
 		AlwaysClearScreen:     true,
+
+		Preferences: UserPreferences{
+			CompactWidth: 60,
+		},
 	}
 }
 
@@ -279,10 +280,9 @@ func (config *Config) LoadKeybindings() {
 	_ = config.load("keybindings", config.Dir, "keybindings.yaml", &inputConfig)
 
 	config.Keybindings.Main = parseKeybindings(inputConfig.Main)
-	config.Keybindings.Roster = parseKeybindings(inputConfig.Roster)
+	config.Keybindings.RoomList = parseKeybindings(inputConfig.RoomList)
 	config.Keybindings.Room = parseKeybindings(inputConfig.Room)
 	config.Keybindings.Modal = parseKeybindings(inputConfig.Modal)
-	config.Keybindings.Visual = parseKeybindings(inputConfig.Visual)
 }
 
 func (config *Config) SaveKeybindings() {

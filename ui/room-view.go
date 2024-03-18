@@ -125,7 +125,7 @@ func NewRoomView(parent *MainView, room *rooms.Room) *RoomView {
 
 	// Initialize user list settings
 	// Compact mode hides user list by default, but overlays it when opened
-	if parent.compactMode {
+	if parent.CompactMode() {
 		view.userListOverlay = true
 	} else {
 		view.userListVisible = !parent.config.Preferences.HideUserList
@@ -386,23 +386,7 @@ func (view *RoomView) OnKeyEvent(event mauview.KeyEvent) bool {
 		Mod: event.Modifiers(),
 	}
 
-	if view.selecting {
-		switch view.config.Keybindings.Visual[kb] {
-		case "clear":
-			view.ClearAllContext()
-		case "select_prev":
-			view.SelectPrevious()
-		case "select_next":
-			view.SelectNext()
-		case "confirm":
-			view.OnSelect(msgView.selected)
-		default:
-			return false
-		}
-		return true
-	}
-
-	switch view.config.Keybindings.Room[kb] {
+	switch view.parent.config.Keybindings.Room[kb] {
 	case "clear":
 		view.ClearAllContext()
 		return true
@@ -417,6 +401,19 @@ func (view *RoomView) OnKeyEvent(event mauview.KeyEvent) bool {
 		return true
 	case "send":
 		view.InputSubmit(view.input.GetText())
+		return true
+	case "back":
+		if view.parent.displayState == CompactRoom {
+			view.parent.SetDisplayState(CompactRoomList)
+		} else {
+			view.parent.SetFlexFocused(view.parent.roomListView)
+		}
+		view.parent.parent.Render()
+		return true
+	case "toggle_user_list":
+		view.parent.config.Preferences.HideUserList = !view.parent.config.Preferences.HideUserList
+		view.userListVisible = !view.parent.config.Preferences.HideUserList
+		view.parent.parent.Render()
 		return true
 	}
 	return view.input.OnKeyEvent(event)
@@ -902,10 +899,10 @@ func (view *RoomView) Update() {
 
 	// Get topic string
 	topicStr := strings.TrimSpace(strings.ReplaceAll(view.Room.GetTopic(), "\n", " "))
-	if view.parent.compactMode {
+	if view.parent.CompactMode() {
 		topicStr = view.Room.GetTitle()
 
-	} else if view.config.Preferences.HideRoomList {
+	} else {
 		if len(topicStr) > 0 {
 			topicStr = fmt.Sprintf("%s - %s", view.Room.GetTitle(), topicStr)
 		} else {

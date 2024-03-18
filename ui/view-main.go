@@ -26,7 +26,6 @@ import (
 	sync "github.com/sasha-s/go-deadlock"
 
 	"go.mau.fi/mauview"
-	"go.mau.fi/tcell"
 
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/pushrules"
@@ -42,13 +41,20 @@ import (
 	"maunium.net/go/gomuks/ui/widget"
 )
 
-type MainView struct {
+type DisplayState int
+const (
+	CompactRoomList DisplayState = iota
+	CompactRoom
+	Full
+)
 
-	compactMode  bool
+type MainView struct {
 
 	// Views
 	modal mauview.Component
 	flex *mauview.Flex
+	screenWidth int
+	displayState DisplayState
 
 	// Subviews
 	roomView     *mauview.Box
@@ -60,7 +66,7 @@ type MainView struct {
 	roomsLock    sync.RWMutex
 
 	// Focus control
-	focused      mauview.Focusable
+	focusedBelowModal mauview.Focusable
 	lastFocusTime time.Time
 	
 	// Command proessor
@@ -80,9 +86,9 @@ type MainView struct {
 
 func (ui *GomuksUI) NewMainView() mauview.Component {
 	mainView := &MainView{
-		compactMode : true,
 
 		flex: mauview.NewFlex().SetDirection(mauview.FlexColumn),
+		displayState: CompactRoomList,
 
 		roomView: mauview.NewBox(nil).SetBorder(false),
 
@@ -128,38 +134,28 @@ func (view *MainView) FlashLED(r, g, b uint16) {
 
 func (view *MainView) ShowModal(modal mauview.Component) {
 	view.modal = modal
+	view.flex.Blur()
 	var ok bool
-	view.focused, ok = modal.(mauview.Focusable)
-	if !ok {
-		view.focused = nil
-	} else {
-		view.focused.Focus()
+	view.focusedBelowModal, ok = modal.(mauview.Focusable)
+	if ok {
+		view.focusedBelowModal.Focus()
 	}
 }
 
 func (view *MainView) HideModal() {
 	view.modal = nil
-	view.focused = view.roomView
+	view.focusedBelowModal.Focus()
+	view.focusedBelowModal = nil
 }
 
-var oldWidth = 0
 func (view *MainView) Draw(screen mauview.Screen) {
 
-	// TODO: reflow handler?
+	// Determine if interface should be reflowed
+	// TODO: Is there a resize handler?
 	width, _ := screen.Size()
-	if width != oldWidth {
-		oldWidth = width
-
-		view.flex = mauview.NewFlex().SetDirection(mauview.FlexColumn)
-
-		if !view.config.Preferences.HideRoomList {
-			view.flex.AddFixedComponent(view.roomListView, 25).
-				AddFixedComponent(widget.NewBorder(), 1)
-		}
-
-		if width > 40 {
-			view.flex.AddProportionalComponent(view.roomView, 1)
-		}
+	if width != view.screenWidth {
+		view.screenWidth = width
+		view.Reflow()
 	}
 
 	// Draw entire flex view
@@ -226,7 +222,7 @@ func (view *MainView) OnKeyEvent(event mauview.KeyEvent) bool {
 	if view.modal != nil {
 		return view.modal.OnKeyEvent(event)
 	}
-
+/*
 	kb := config.Keybind{
 		Key: event.Key(),
 		Ch:  event.Rune(),
@@ -253,8 +249,7 @@ func (view *MainView) OnKeyEvent(event mauview.KeyEvent) bool {
 	case "show_bare":
 		view.ShowBare(view.currentRoom)
 	case "toggle_rooms":
-		view.config.Preferences.HideRoomList = !view.config.Preferences.HideRoomList
-		view.parent.Render()
+		view.ToggleRoomList()
 	case "quit":
 		view.gmx.Stop(true)
 	default:
@@ -262,6 +257,7 @@ func (view *MainView) OnKeyEvent(event mauview.KeyEvent) bool {
 	}
 	return true
 defaultHandler:
+*/
 	return view.flex.OnKeyEvent(event)
 }
 
@@ -271,30 +267,61 @@ func (view *MainView) OnMouseEvent(event mauview.MouseEvent) bool {
 	if view.modal != nil {
 		return view.modal.OnMouseEvent(event)
 	}
-	if view.config.Preferences.HideRoomList {
-		return view.roomView.OnMouseEvent(event)
-	}
 	return view.flex.OnMouseEvent(event)
 }
 
 func (view *MainView) OnPasteEvent(event mauview.PasteEvent) bool {
 	if view.modal != nil {
 		return view.modal.OnPasteEvent(event)
-	} else if view.config.Preferences.HideRoomList {
-		return view.roomView.OnPasteEvent(event)
 	}
 	return view.flex.OnPasteEvent(event)
 }
 
 func (view *MainView) Focus() {
-	if view.focused != nil {
-		view.focused.Focus()
-	}
+	view.flex.Focus()
 }
 
 func (view *MainView) Blur() {
-	if view.focused != nil {
-		view.focused.Blur()
+	view.flex.Blur()
+}
+
+// Component must be added to flex already
+type ComponentWithFocus interface {
+	mauview.Component
+	mauview.Focusable
+}
+func (view *MainView) SetFlexFocused(comp ComponentWithFocus) {
+	view.flex.SetFocused(comp)
+}
+
+func (view *MainView) SetDisplayState(displayState DisplayState) {
+
+	view.displayState = displayState
+
+	view.flex = mauview.NewFlex().SetDirection(mauview.FlexColumn)
+
+	switch view.displayState {
+
+	case CompactRoomList:
+		view.flex.AddProportionalComponent(view.roomListView, 1)
+		view.SetFlexFocused(view.roomListView)
+	case CompactRoom:
+		view.flex.AddProportionalComponent(view.roomView, 1)
+		view.SetFlexFocused(view.roomView)
+	default:
+		view.flex.AddFixedComponent(view.roomListView, 25).
+			AddFixedComponent(widget.NewBorder(), 1).
+			AddProportionalComponent(view.roomView, 1)
+		view.SetFlexFocused(view.roomView)
+	}
+}
+
+func (view *MainView) Reflow() {
+
+	if view.screenWidth > view.config.Preferences.CompactWidth {
+		view.SetDisplayState(Full)
+	} else {
+		view.SetDisplayState(CompactRoom)
 	}
 }
 
@@ -320,8 +347,6 @@ func (view *MainView) switchRoom(tag string, room *rooms.Room, lock bool) {
 	view.MarkRead(roomView)
 	view.roomListView.SetSelected(tag, room)
 
-	view.focused = view.roomView
-	view.roomView.Focus()
 	view.parent.Render()
 
 	if msgView := roomView.MessageView(); len(msgView.messages) < 20 && !msgView.initialHistoryLoaded {
@@ -520,4 +545,8 @@ func (view *MainView) LoadHistory(roomID id.RoomID) {
 		roomView.AddHistoryEvent(evt)
 	}
 	view.parent.Render()
+}
+
+func (view *MainView) CompactMode() (bool) {
+	return (view.displayState == CompactRoomList) || (view.displayState == CompactRoom)
 }

@@ -29,6 +29,7 @@ import (
 
 	"maunium.net/go/mautrix/id"
 
+	"maunium.net/go/gomuks/config"
 	"maunium.net/go/gomuks/debug"
 	"maunium.net/go/gomuks/matrix/rooms"
 )
@@ -444,8 +445,32 @@ func (list *RoomList) ContentHeight() (height int) {
 	return
 }
 
-func (list *RoomList) OnKeyEvent(_ mauview.KeyEvent) bool {
-	return false
+func (list *RoomList) OnKeyEvent(event mauview.KeyEvent) bool {
+
+	kb := config.Keybind{
+		Key: event.Key(),
+		Ch:  event.Rune(),
+		Mod: event.Modifiers(),
+	}
+	switch list.parent.config.Keybindings.RoomList[kb] {
+	case "next_room":
+		list.parent.SwitchRoom(list.Next())
+	case "prev_room":
+		list.parent.SwitchRoom(list.Previous())
+	case "search_rooms":
+		list.parent.ShowModal(NewFuzzySearchModal(list.parent, 42, 12))
+	case "scroll_up":
+		msgView := list.parent.currentRoom.MessageView()
+		msgView.AddScrollOffset(msgView.TotalHeight())
+	case "scroll_down":
+		msgView := list.parent.currentRoom.MessageView()
+		msgView.AddScrollOffset(-msgView.TotalHeight())
+	case "back":
+		list.parent.gmx.Stop(true)
+	default:
+		return true
+	}
+	return true
 }
 
 func (list *RoomList) OnPasteEvent(_ mauview.PasteEvent) bool {
