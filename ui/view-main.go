@@ -222,42 +222,10 @@ func (view *MainView) OnKeyEvent(event mauview.KeyEvent) bool {
 	if view.modal != nil {
 		return view.modal.OnKeyEvent(event)
 	}
-/*
-	kb := config.Keybind{
-		Key: event.Key(),
-		Ch:  event.Rune(),
-		Mod: event.Modifiers(),
+
+	if view.roomListView.isFocused {
+		return view.roomListView.OnKeyEvent(event)
 	}
-	switch view.config.Keybindings.Main[kb] {
-	case "next_room":
-		view.SwitchRoom(view.roomListView.Next())
-	case "prev_room":
-		view.SwitchRoom(view.roomListView.Previous())
-	case "search_rooms":
-		view.ShowModal(NewFuzzySearchModal(view, 42, 12))
-	case "scroll_up":
-		msgView := view.currentRoom.MessageView()
-		msgView.AddScrollOffset(msgView.TotalHeight())
-	case "scroll_down":
-		msgView := view.currentRoom.MessageView()
-		msgView.AddScrollOffset(-msgView.TotalHeight())
-	case "add_newline":
-		newlineEvent := tcell.NewEventKey(tcell.KeyEnter, '\n', event.Modifiers()|tcell.ModShift)
-		return view.flex.OnKeyEvent(newlineEvent)
-	case "next_active_room":
-		view.SwitchRoom(view.roomListView.NextWithActivity())
-	case "show_bare":
-		view.ShowBare(view.currentRoom)
-	case "toggle_rooms":
-		view.ToggleRoomList()
-	case "quit":
-		view.gmx.Stop(true)
-	default:
-		goto defaultHandler
-	}
-	return true
-defaultHandler:
-*/
 	return view.flex.OnKeyEvent(event)
 }
 
@@ -287,6 +255,7 @@ func (view *MainView) Blur() {
 
 // Component must be added to flex already
 func (view *MainView) SetFlexFocused(comp mauview.FocusableComponent) {
+	view.flex.Blur()
 	view.flex.SetFocused(comp)
 }
 
@@ -294,21 +263,22 @@ func (view *MainView) SetDisplayState(displayState DisplayState) {
 
 	view.displayState = displayState
 
+	view.flex.Blur()
 	view.flex = mauview.NewFlex().SetDirection(mauview.FlexColumn)
 
 	switch view.displayState {
 
 	case CompactRoomList:
 		view.flex.AddProportionalComponent(view.roomListView, 1)
-		view.SetFlexFocused(view.roomListView)
+		view.flex.SetFocused(view.roomListView)
 	case CompactRoom:
 		view.flex.AddProportionalComponent(view.roomView, 1)
-		view.SetFlexFocused(view.roomView)
+		view.flex.SetFocused(view.roomView)
 	default:
 		view.flex.AddFixedComponent(view.roomListView, 25).
 			AddFixedComponent(widget.NewBorder(), 1).
 			AddProportionalComponent(view.roomView, 1)
-		view.SetFlexFocused(view.roomView)
+		view.flex.SetFocused(view.roomView)
 	}
 }
 

@@ -62,8 +62,6 @@ type RoomView struct {
 	ulScreen       *mauview.ProxyScreen
 
 	userListLoaded bool
-	userListVisible bool
-	userListOverlay bool
 
 	prevScreen mauview.Screen
 
@@ -105,8 +103,6 @@ func NewRoomView(parent *MainView, room *rooms.Room) *RoomView {
 		ulScreen:       &mauview.ProxyScreen{OffsetY: StatusBarHeight, Width: UserListWidth},
 
 		userListLoaded: false,
-		userListVisible: false,
-		userListOverlay: true,
 
 		parent: parent,
 		config: parent.config,
@@ -122,14 +118,6 @@ func NewRoomView(parent *MainView, room *rooms.Room) *RoomView {
 		return true
 	})
 	view.Room.SetPostLoad(view.loadTyping)
-
-	// Initialize user list settings
-	// Compact mode hides user list by default, but overlays it when opened
-	if parent.CompactMode() {
-		view.userListOverlay = true
-	} else {
-		view.userListVisible = !parent.config.Preferences.HideUserList
-	}
 
 	// Initialize text input box
 	view.input.
@@ -329,7 +317,7 @@ func (view *RoomView) Draw(screen mauview.Screen) {
 	view.contentScreen.Height = screenHeight - inputHeight - TopicBarHeight - StatusBarHeight
 	// User list hidden or drawn as overlay:
 	// Size content width to fill screen
-	if view.userListVisible && !view.userListOverlay {
+	if !view.parent.config.Preferences.HideUserList && !view.parent.config.Preferences.OverlayUserList {
 		view.contentScreen.Width = screenWidth - UserListWidth
 	} else {
 		view.contentScreen.Width = screenWidth
@@ -342,10 +330,10 @@ func (view *RoomView) Draw(screen mauview.Screen) {
 	// Place input bar below status
 	view.inputScreen.OffsetY = view.statusScreen.YEnd()
 
-	if view.userListVisible {
+	if !view.parent.config.Preferences.HideUserList {
 		view.ulScreen.Height = view.contentScreen.Height
 
-		if view.userListOverlay {
+		if view.parent.config.Preferences.OverlayUserList {
 			view.ulScreen.OffsetX = screenWidth - UserListWidth
 		} else {
 			view.ulScreen.OffsetX = view.contentScreen.XEnd()
@@ -366,7 +354,7 @@ func (view *RoomView) Draw(screen mauview.Screen) {
 	view.input.Draw(view.inputScreen)
 
 	// Only draw user list if visible
-	if view.userListVisible {
+	if !view.parent.config.Preferences.HideUserList {
 		view.userList.Draw(view.ulScreen)
 	}
 }
@@ -412,7 +400,6 @@ func (view *RoomView) OnKeyEvent(event mauview.KeyEvent) bool {
 		return true
 	case "toggle_user_list":
 		view.parent.config.Preferences.HideUserList = !view.parent.config.Preferences.HideUserList
-		view.userListVisible = !view.parent.config.Preferences.HideUserList
 		view.parent.parent.Render()
 		return true
 	}

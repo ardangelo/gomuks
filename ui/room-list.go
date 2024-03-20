@@ -469,6 +469,12 @@ func (list *RoomList) OnKeyEvent(event mauview.KeyEvent) bool {
 	case "scroll_down":
 		msgView := list.parent.currentRoom.MessageView()
 		msgView.AddScrollOffset(-msgView.TotalHeight())
+	case "select_room":
+		if list.parent.displayState == CompactRoomList {
+			list.parent.SetDisplayState(CompactRoom)
+		} else {
+			list.parent.SetFlexFocused(list.parent.roomView)
+		}
 	case "back":
 		list.parent.gmx.Stop(true)
 	default:

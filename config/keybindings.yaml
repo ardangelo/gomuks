@@ -14,6 +14,7 @@ room_list:
   'PageDown': scroll_down
   'Escape': back
   'Tab': next_window
+  'Enter': select_room
 
 room:
   'Up': scroll_up
