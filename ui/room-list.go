@@ -69,6 +69,8 @@ type RoomList struct {
 
 	parent *MainView
 
+	isFocused bool
+
 	// The list of tags in display order.
 	tags TagNameList
 	// The list of rooms, in reverse order.
@@ -92,6 +94,8 @@ type RoomList struct {
 func NewRoomList(parent *MainView) *RoomList {
 	list := &RoomList{
 		parent: parent,
+
+		isFocused: false,
 
 		items: make(map[string]*TagRoomList),
 		tags:  []string{},
@@ -496,11 +500,11 @@ func (list *RoomList) OnMouseEvent(event mauview.MouseEvent) bool {
 }
 
 func (list *RoomList) Focus() {
-
+	list.isFocused = true
 }
 
 func (list *RoomList) Blur() {
-
+	list.isFocused = false
 }
 
 func (list *RoomList) clickRoom(line, column int, mod bool) bool {

@@ -51,11 +51,18 @@ func NewDefaultOrderedRoom(room *rooms.Room) *OrderedRoom {
 	return NewOrderedRoom("0.5", room)
 }
 
-func (or *OrderedRoom) Draw(roomList *RoomList, screen mauview.Screen, x, y, lineWidth int, isSelected bool) {
+func (or *OrderedRoom) Draw(roomList *RoomList, screen mauview.Screen, x, y, lineWidth int,
+	isActive bool, isHighlighted bool) {
+
 	style := tcell.StyleDefault.
 		Foreground(roomList.mainTextColor).
 		Bold(or.HasNewMessages())
-	if isSelected {
+	if isActive {
+		style = style.
+			Bold(true).
+			Underline(true)
+	}
+	if isHighlighted {
 		style = style.
 			Foreground(roomList.selectedTextColor).
 			Background(roomList.selectedBackgroundColor)
@@ -313,8 +320,9 @@ func (trl *TagRoomList) Draw(screen mauview.Screen) {
 		item := items[i]
 
 		lineWidth := width
-		isSelected := trl.name == trl.parent.selectedTag && item.Room == trl.parent.selected
-		item.Draw(trl.parent, screen, 0, y, lineWidth, isSelected)
+		isActive := trl.name == trl.parent.selectedTag && item.Room == trl.parent.selected
+		isHighlighted := trl.parent.isFocused && isActive
+		item.Draw(trl.parent, screen, 0, y, lineWidth, isActive, isHighlighted)
 		y++
 	}
 	hasLess := trl.maxShown > 10

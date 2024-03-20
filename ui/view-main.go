@@ -286,11 +286,7 @@ func (view *MainView) Blur() {
 }
 
 // Component must be added to flex already
-type ComponentWithFocus interface {
-	mauview.Component
-	mauview.Focusable
-}
-func (view *MainView) SetFlexFocused(comp ComponentWithFocus) {
+func (view *MainView) SetFlexFocused(comp mauview.FocusableComponent) {
 	view.flex.SetFocused(comp)
 }
 
