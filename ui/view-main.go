@@ -74,7 +74,6 @@ type MainView struct {
 
 	// Hardware control
 	led     *beepberry.LED
-	ledLock sync.RWMutex
 
 	// Gomuks control
 	matrix ifc.MatrixContainer
@@ -122,14 +121,7 @@ func (view *MainView) FlashLED(r, g, b uint16) {
 		return
 	}
 
-	view.ledLock.Lock()
-	defer view.ledLock.Unlock()
-
-	view.led.SetColor(r, g, b)
-	view.led.On()
-	time.Sleep(time.Second)
-	view.led.Off()
-	view.led.SetColor(0xFF, 0xFF, 0xFF)
+	view.led.FlashUntilKey(r, g, b)
 }
 
 func (view *MainView) ShowModal(modal mauview.Component) {
@@ -223,9 +215,6 @@ func (view *MainView) OnKeyEvent(event mauview.KeyEvent) bool {
 		return view.modal.OnKeyEvent(event)
 	}
 
-	if view.roomListView.isFocused {
-		return view.roomListView.OnKeyEvent(event)
-	}
 	return view.flex.OnKeyEvent(event)
 }
 
