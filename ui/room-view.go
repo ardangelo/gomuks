@@ -313,8 +313,17 @@ func (view *RoomView) Draw(screen mauview.Screen) {
 	view.inputScreen.Width = screenWidth
 	view.inputScreen.Height = inputHeight
 
+	// Determine if status bar should be shown
+	statusText := view.GetStatus()
+	drawStatusBar := !view.parent.CompactMode() ||
+		(view.parent.CompactMode() && len(statusText) > 0)
+
 	// Size content to fill between topic & status bar, input box
-	view.contentScreen.Height = screenHeight - inputHeight - TopicBarHeight - StatusBarHeight
+	view.contentScreen.Height = screenHeight - inputHeight - TopicBarHeight
+	if drawStatusBar {
+		view.contentScreen.Height -= StatusBarHeight
+	}
+
 	// User list hidden or drawn as overlay:
 	// Size content width to fill screen
 	if !view.parent.config.Preferences.HideUserList && !view.parent.config.Preferences.OverlayUserList {
@@ -323,12 +332,30 @@ func (view *RoomView) Draw(screen mauview.Screen) {
 		view.contentScreen.Width = screenWidth
 	}
 
-	// Place content below topic bar
-	view.contentScreen.OffsetY = TopicBarHeight
-	// Place status bar below content
-	view.statusScreen.OffsetY = view.contentScreen.YEnd()
-	// Place input bar below status
-	view.inputScreen.OffsetY = view.statusScreen.YEnd()
+	// Compact mode: place status bar above content, but hide by default
+	//   Does not move content when it is shown
+	if view.parent.CompactMode() {
+		if drawStatusBar {
+			// Status bar below topic bar
+			view.statusScreen.OffsetY = TopicBarHeight
+			// Content below status bar
+			view.contentScreen.OffsetY = view.statusScreen.YEnd()
+		} else {
+			// Content below topic bar
+			view.contentScreen.OffsetY = TopicBarHeight
+		}
+		// Input bar below content
+		view.inputScreen.OffsetY = view.contentScreen.YEnd()
+
+	// Full mode: place status bar below content
+	} else {
+		// Content below topic bar
+		view.contentScreen.OffsetY = TopicBarHeight
+		// Status bar below content
+		view.statusScreen.OffsetY = view.contentScreen.YEnd()
+		// Input bar below status bar
+		view.inputScreen.OffsetY = view.statusScreen.YEnd()
+	}
 
 	if !view.parent.config.Preferences.HideUserList {
 		view.ulScreen.Height = view.contentScreen.Height
@@ -349,8 +376,10 @@ func (view *RoomView) Draw(screen mauview.Screen) {
 	// Draw always-visible elements
 	view.topic.Draw(view.topicScreen)
 	view.content.Draw(view.contentScreen)
-	view.status.SetText(view.GetStatus())
-	view.status.Draw(view.statusScreen)
+	if drawStatusBar {
+		view.status.SetText(view.GetStatus())
+		view.status.Draw(view.statusScreen)
+	}
 	view.input.Draw(view.inputScreen)
 
 	// Only draw user list if visible
@@ -382,9 +411,18 @@ func (view *RoomView) OnKeyEvent(event mauview.KeyEvent) bool {
 		if msgView.IsAtTop() {
 			go view.parent.LoadHistory(view.Room.ID)
 		}
+		msgView.AddScrollOffset(+1)
+		return true
+	case "scroll_up_page":
+		if msgView.IsAtTop() {
+			go view.parent.LoadHistory(view.Room.ID)
+		}
 		msgView.AddScrollOffset(+msgView.Height() / 2)
 		return true
 	case "scroll_down":
+		msgView.AddScrollOffset(-1)
+		return true
+	case "scroll_down_page":
 		msgView.AddScrollOffset(-msgView.Height() / 2)
 		return true
 	case "send":
