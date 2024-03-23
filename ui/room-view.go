@@ -432,7 +432,7 @@ func (view *RoomView) OnKeyEvent(event mauview.KeyEvent) bool {
 		if view.parent.displayState == CompactRoom {
 			view.parent.SetDisplayState(CompactRoomList)
 		} else {
-			view.parent.SetFlexFocused(view.parent.roomListView)
+			view.parent.SetFlexFocused(view.parent.roomListView.GetView())
 		}
 		view.parent.parent.Render()
 		return true

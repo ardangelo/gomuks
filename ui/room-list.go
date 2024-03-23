@@ -112,6 +112,10 @@ func NewTagRoomListView(parent *MainView) *TagRoomListView {
 	return list
 }
 
+func (list *TagRoomListView) GetView() mauview.FocusableComponent {
+	return list
+}
+
 func (list *TagRoomListView) Contains(roomID id.RoomID) bool {
 	list.RLock()
 	defer list.RUnlock()
@@ -600,10 +604,6 @@ func (list *TagRoomListView) GetTagDisplayName(tag string) string {
 // Draw draws this primitive onto the screen.
 func (list *TagRoomListView) Draw(screen mauview.Screen) {
 	list.width, list.height = screen.Size()
-
-	if !list.parent.config.Preferences.TagGroupRooms {
-		return
-	}
 
 	y := 0
 	yLimit := y + list.height

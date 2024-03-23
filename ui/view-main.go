@@ -58,7 +58,7 @@ type MainView struct {
 
 	// Subviews
 	roomView     *mauview.Box
-	roomListView *TagRoomListView
+	roomListView ifc.RoomListView
 
 	// Room control
 	currentRoom  *RoomView
@@ -256,13 +256,13 @@ func (view *MainView) SetDisplayState(displayState DisplayState) {
 	switch view.displayState {
 
 	case CompactRoomList:
-		view.flex.AddProportionalComponent(view.roomListView, 1)
-		view.flex.SetFocused(view.roomListView)
+		view.flex.AddProportionalComponent(view.roomListView.GetView(), 1)
+		view.flex.SetFocused(view.roomListView.GetView())
 	case CompactRoom:
 		view.flex.AddProportionalComponent(view.roomView, 1)
 		view.flex.SetFocused(view.roomView)
 	default:
-		view.flex.AddFixedComponent(view.roomListView, 25).
+		view.flex.AddFixedComponent(view.roomListView.GetView(), 25).
 			AddFixedComponent(widget.NewBorder(), 1).
 			AddProportionalComponent(view.roomView, 1)
 		view.flex.SetFocused(view.roomView)
@@ -413,7 +413,8 @@ func (view *MainView) UpdateTags(room *rooms.Room) {
 	if !view.roomListView.Contains(room.ID) {
 		return
 	}
-	reselect := view.roomListView.selected == room
+	_, selectedRoom := view.roomListView.Selected()
+	reselect := selectedRoom == room
 	view.roomListView.Remove(room)
 	view.roomListView.Add(room)
 	if reselect {
