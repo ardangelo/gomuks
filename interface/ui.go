@@ -82,6 +82,12 @@ type RoomListView interface {
 	Last() (string, *rooms.Room)
 	Previous() (string, *rooms.Room)
 	Next() (string, *rooms.Room)
+	NextWithActivity() (string, *rooms.Room)
+
+	// FocusableComponent
+	OnKeyEvent(event mauview.KeyEvent) bool
+	OnPasteEvent(_ mauview.PasteEvent) bool
+	OnMouseEvent(event mauview.MouseEvent) bool
 }
 
 type RoomView interface {

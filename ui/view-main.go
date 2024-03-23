@@ -98,7 +98,11 @@ func (ui *GomuksUI) NewMainView() mauview.Component {
 		config: ui.gmx.Config(),
 		parent: ui,
 	}
-	mainView.roomListView = NewTagRoomListView(mainView)
+	if mainView.config.Preferences.TagGroupRooms {
+		mainView.roomListView = NewTagRoomListView(mainView)
+	} else {
+		mainView.roomListView = NewHubRoomListView(mainView)
+	}
 	mainView.cmdProcessor = NewCommandProcessor(mainView)
 
 	if led, err := beepberry.NewLED(); err == nil {
