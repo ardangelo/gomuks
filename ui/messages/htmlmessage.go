@@ -31,8 +31,8 @@ type HTMLMessage struct {
 	TextColor tcell.Color
 }
 
-func NewHTMLMessage(evt *muksevt.Event, displayname string, root html.Entity) *UIMessage {
-	return newUIMessage(evt, displayname, &HTMLMessage{
+func NewHTMLMessage(evt *muksevt.Event, displayname string, isOwnMessage bool, root html.Entity) *UIMessage {
+	return newUIMessage(evt, displayname, isOwnMessage, &HTMLMessage{
 		Root: root,
 	})
 }

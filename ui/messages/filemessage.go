@@ -55,7 +55,7 @@ type FileMessage struct {
 }
 
 // NewFileMessage creates a new FileMessage object with the provided values and the default state.
-func NewFileMessage(matrix ifc.MatrixContainer, evt *muksevt.Event, displayname string) *UIMessage {
+func NewFileMessage(matrix ifc.MatrixContainer, evt *muksevt.Event, displayname string, isOwnMessage bool) *UIMessage {
 	content := evt.Content.AsMessage()
 	var file, thumbnailFile *attachment.EncryptedFile
 	if content.File != nil {
@@ -66,7 +66,7 @@ func NewFileMessage(matrix ifc.MatrixContainer, evt *muksevt.Event, displayname 
 		thumbnailFile = &content.Info.ThumbnailFile.EncryptedFile
 		content.Info.ThumbnailURL = content.Info.ThumbnailFile.URL
 	}
-	return newUIMessage(evt, displayname, &FileMessage{
+	return newUIMessage(evt, displayname, isOwnMessage, &FileMessage{
 		Type:          content.MsgType,
 		Body:          content.Body,
 		URL:           content.URL.ParseOrIgnore(),

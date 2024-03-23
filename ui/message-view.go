@@ -635,19 +635,18 @@ func (view *MessageView) Draw(screen mauview.Screen) {
 		return
 	}
 
+	// TODO: combine this and rightalign
+	noLeftPad := view.config.Preferences.BareMessageView || view.parent.parent.CompactMode()
+
+	// Left-align messages by default
 	usernameX := 0
 	if !view.config.Preferences.HideTimestamp {
 		usernameX += view.TimestampWidth + TimestampSenderGap
 	}
 	messageX := usernameX + view.widestSender() + SenderMessageGap
-
-	noLeftPad := view.config.Preferences.BareMessageView || view.parent.parent.CompactMode()
 	if noLeftPad {
-		if view.parent.parent.CompactMode() {
-			messageX = 2
-		} else {
-			messageX = 0
-		}
+		usernameX = 0
+		messageX = 0
 	}
 
 	indexOffset := view.getIndexOffset(screen, height, messageX)
@@ -657,6 +656,7 @@ func (view *MessageView) Draw(screen mauview.Screen) {
 		viewStart = -indexOffset
 	}
 
+	// Left pad: pad to widest sender
 	if !noLeftPad {
 		separatorX := usernameX + view.widestSender() + SenderSeparatorGap
 		scrollBarHeight, scrollBarPos := view.calculateScrollBar(height)
@@ -679,6 +679,16 @@ func (view *MessageView) Draw(screen mauview.Screen) {
 
 		msg := view.msgBuffer[index]
 		header := view.drawCompactHeader(msg)
+
+		// Compact mode: right-align messages from own user
+		rightAlign := msg.IsOwnMessage && view.parent.parent.CompactMode()
+		if rightAlign {
+			usernameX = view.width() - len(msg.Sender())
+			messageX = 2
+		} else {
+			usernameX = 0
+			messageX = 0
+		}
 
 		if msg == prevMsg {
 			debug.Print("Unexpected re-encounter of", msg, msg.Height(header), "at", line, index)
@@ -706,28 +716,95 @@ func (view *MessageView) Draw(screen mauview.Screen) {
 		for i := index - 1; i >= 0 && view.msgBuffer[i] == msg; i-- {
 			line--
 		}
-		offset := 0
+		offsetY := 0
 		if header {
-			offset = 1
+			offsetY = 1
 
 			boldStyle := tcell.StyleDefault.Bold(true)
 			username := msg.Sender()
-			widget.WriteLine(screen, mauview.AlignLeft, username,
-				messageX, line, len(username), boldStyle.Foreground(msg.SenderColor()))
-			widget.WriteLine(screen, mauview.AlignLeft, " "+string(tcell.RuneBullet)+" ",
-				messageX+len(username), line, 3, boldStyle)
-			widget.WriteLine(screen, mauview.AlignLeft, msg.FormatTime(),
-				messageX+len(username)+3, line, view.width()-len(username)-3,
-				boldStyle.Foreground(msg.TimestampColor()),
-			)
+			alignment := mauview.AlignLeft
+			usernameStartLeft := " »"
+			usernameStartRight := " «"
+			usernameTimeSep := " "+string(tcell.RuneBullet)
+			timeStr := msg.FormatTime()
+			editedStr := ""
 			if msg.Edited {
-				widget.WriteLine(screen, mauview.AlignLeft, " "+string(tcell.RuneBullet)+" ",
-					messageX+len(username)+3+len(msg.FormatTime()), line, 3, boldStyle)
-				widget.WriteLine(screen, mauview.AlignLeft, "Edited",
-					messageX+len(username)+len(msg.FormatTime())+6, line, 6, boldStyle.Foreground(tcell.ColorDarkRed))
+				editedStr = " (Edited)"
+			}
+			maxUsernameLen := view.width() - (len(usernameStartLeft) +
+				len(usernameTimeSep) + len(timeStr) + len(editedStr))
+
+			if !rightAlign {
+				offsetX := messageX
+
+				// Draw username starter
+				widget.WriteLine(screen, alignment, usernameStartLeft,
+					offsetX, line, len(usernameStartLeft),
+					boldStyle)
+				offsetX += len(usernameStartLeft)
+				// Draw username
+				widget.WriteLine(screen, alignment, username,
+					offsetX, line, maxUsernameLen,
+					boldStyle.Foreground(msg.SenderColor()))
+				if (len(username) < maxUsernameLen) {
+					offsetX += len(username)
+				} else {
+					offsetX += maxUsernameLen
+				}
+				// Draw edited marker
+				if (len(editedStr) > 0) {
+					widget.WriteLine(screen, alignment, editedStr,
+						offsetX, line, len(editedStr),
+						boldStyle.Foreground(tcell.ColorDarkRed))
+					offsetX += len(editedStr)
+				}
+				// Draw separator
+				widget.WriteLine(screen, alignment, usernameTimeSep,
+					offsetX, line, len(usernameTimeSep),
+					boldStyle)
+				offsetX += len(usernameTimeSep)
+				// Draw time
+				widget.WriteLine(screen, alignment, timeStr,
+					offsetX, line, len(timeStr),
+					boldStyle.Foreground(msg.TimestampColor()))
+				offsetX += len(timeStr)
+			} else {
+				offsetX := view.width()
+
+				// Draw username starter
+				offsetX -= len(usernameStartRight)
+				widget.WriteLine(screen, alignment, usernameStartRight,
+					offsetX, line, len(usernameStartRight),
+					boldStyle)
+				// Draw time
+				offsetX -= len(timeStr)
+				widget.WriteLine(screen, alignment, timeStr,
+					offsetX, line, len(timeStr),
+					boldStyle.Foreground(msg.TimestampColor()))
+				// Draw separator
+				offsetX -= len(usernameTimeSep)
+				widget.WriteLine(screen, alignment, usernameTimeSep,
+					offsetX, line, len(usernameTimeSep),
+					boldStyle)
+				// Draw edited marker
+				if (len(editedStr) > 0) {
+					offsetX -= len(editedStr)
+					widget.WriteLine(screen, alignment, editedStr,
+						offsetX, line, len(editedStr),
+						boldStyle.Foreground(tcell.ColorDarkRed))
+				}
+				// Draw username
+				if (len(username) < maxUsernameLen) {
+					offsetX -= len(username)
+				} else {
+					offsetX -= maxUsernameLen
+				}
+				widget.WriteLine(screen, alignment, username,
+					offsetX, line, maxUsernameLen,
+					boldStyle.Foreground(msg.SenderColor()))
 			}
 		}
-		msg.Draw(mauview.NewProxyScreen(screen, messageX, line+offset, view.width()-messageX, msg.Height(header)), header)
+		msg.Draw(mauview.NewProxyScreen(screen, messageX, line+offsetY, view.width()-messageX, msg.Height(header)), header)
 		line += msg.Height(header)
 
 		prevMsg = msg

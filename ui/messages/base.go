@@ -79,6 +79,7 @@ type UIMessage struct {
 	IsHighlight        bool
 	IsService          bool
 	IsSelected         bool
+	IsOwnMessage       bool
 	Edited             bool
 	Event              *muksevt.Event
 	ReplyTo            *UIMessage
@@ -96,7 +97,7 @@ func (msg *UIMessage) GetEvent() *muksevt.Event {
 const DateFormat = "January _2, 2006"
 const TimeFormat = "15:04:05"
 
-func newUIMessage(evt *muksevt.Event, displayname string, renderer MessageRenderer) *UIMessage {
+func newUIMessage(evt *muksevt.Event, displayname string, isOwnMessage bool, renderer MessageRenderer) *UIMessage {
 	msgContent := evt.Content.AsMessage()
 	msgtype := msgContent.MsgType
 	if len(msgtype) == 0 {
@@ -124,6 +125,7 @@ func newUIMessage(evt *muksevt.Event, displayname string, renderer MessageRender
 		State:              evt.Gomuks.OutgoingState,
 		IsHighlight:        false,
 		IsService:          false,
+		IsOwnMessage:       isOwnMessage,
 		Edited:             len(evt.Gomuks.Edits) > 0,
 		Reactions:          reactions,
 		Event:              evt,
@@ -325,8 +327,17 @@ func (msg *UIMessage) DrawReactions(screen mauview.Screen, modernHeader bool) {
 	screen = mauview.NewProxyScreen(screen, 0, height-diff, width, 1)
 
 	x := 0
+	alignment := mauview.AlignLeft
+	if msg.IsOwnMessage {
+		alignment = mauview.AlignRight
+	}
+	style := tcell.StyleDefault.
+		Foreground(mauview.Styles.PrimaryTextColor).
+		Background(tcell.ColorDarkGreen)
 	for _, reaction := range msg.Reactions {
-		_, drawn := mauview.PrintWithStyle(screen, reaction.String(), x, 0, width-x, mauview.AlignLeft, tcell.StyleDefault.Foreground(mauview.Styles.PrimaryTextColor).Background(tcell.ColorDarkGreen))
+		_, drawn := mauview.PrintWithStyle(
+			screen, reaction.String(), x, 0, width-x,
+			alignment, style)
 		x += drawn + 1
 		if x >= width {
 			break
@@ -384,7 +395,7 @@ func (msg *UIMessage) DrawReply(screen mauview.Screen, modernHeader bool) mauvie
 	widget.WriteLineSimpleColor(screen, "In reply to", 1, 0, tcell.ColorGreen)
 	widget.WriteLineSimpleColor(screen, msg.ReplyTo.SenderName, 13, 0, msg.ReplyTo.SenderColor())
 	for y := 0; y < 1+replyHeight; y++ {
-		screen.SetCell(0, y, tcell.StyleDefault, '▊')
+		screen.SetCell(0, y, tcell.StyleDefault, '>')
 	}
 	replyScreen := mauview.NewProxyScreen(screen, 1, 1, width-1, replyHeight)
 	msg.ReplyTo.Draw(replyScreen, modernHeader)

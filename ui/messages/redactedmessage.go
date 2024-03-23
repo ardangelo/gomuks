@@ -27,8 +27,8 @@ import (
 
 type RedactedMessage struct{}
 
-func NewRedactedMessage(evt *muksevt.Event, displayname string) *UIMessage {
-	return newUIMessage(evt, displayname, &RedactedMessage{})
+func NewRedactedMessage(evt *muksevt.Event, displayname string, isOwnMessage bool) *UIMessage {
+	return newUIMessage(evt, displayname, isOwnMessage, &RedactedMessage{})
 }
 
 func (msg *RedactedMessage) Clone() MessageRenderer {
