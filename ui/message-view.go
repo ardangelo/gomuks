@@ -635,22 +635,15 @@ func (view *MessageView) Draw(screen mauview.Screen) {
 		return
 	}
 
-	// TODO: combine this and rightalign
 	noLeftPad := view.config.Preferences.BareMessageView || view.parent.parent.CompactMode()
 
-	// Left-align messages by default
+	// Calculate offsets for the usernames column
 	usernameX := 0
 	if !view.config.Preferences.HideTimestamp {
 		usernameX += view.TimestampWidth + TimestampSenderGap
 	}
 	messageX := usernameX + view.widestSender() + SenderMessageGap
-	if noLeftPad {
-		usernameX = 0
-		messageX = 0
-	}
-
 	indexOffset := view.getIndexOffset(screen, height, messageX)
-
 	viewStart := 0
 	if indexOffset < 0 {
 		viewStart = -indexOffset
@@ -672,23 +665,16 @@ func (view *MessageView) Draw(screen mauview.Screen) {
 		}
 	}
 
+	// Draw messages
 	var prevMsg *messages.UIMessage
 	view.msgBufferLock.RLock()
 	for line := viewStart; line < height && indexOffset+line < len(view.msgBuffer); {
 		index := indexOffset + line
 
 		msg := view.msgBuffer[index]
-		header := view.drawCompactHeader(msg)
-
 		// Compact mode: right-align messages from own user
-		rightAlign := msg.IsOwnMessage && view.parent.parent.CompactMode()
-		if rightAlign {
-			usernameX = view.width() - len(msg.Sender())
-			messageX = 2
-		} else {
-			usernameX = 0
-			messageX = 0
-		}
+		header := view.drawCompactHeader(msg)
+		rightAlign := msg.IsOwnMessage && header
 
 		if msg == prevMsg {
 			debug.Print("Unexpected re-encounter of", msg, msg.Height(header), "at", line, index)
@@ -696,7 +682,7 @@ func (view *MessageView) Draw(screen mauview.Screen) {
 			continue
 		}
 
-		if !view.parent.parent.CompactMode() {
+		if !header {
 			if len(msg.FormatTime()) > 0 && !view.config.Preferences.HideTimestamp {
 				widget.WriteLineSimpleColor(screen, msg.FormatTime(), 0, line, msg.TimestampColor())
 			}
@@ -718,6 +704,11 @@ func (view *MessageView) Draw(screen mauview.Screen) {
 		}
 		offsetY := 0
 		if header {
+			if msg.IsOwnMessage {
+				messageX = 2
+			} else {
+				messageX = 0
+			}
 			offsetY = 1
 
 			boldStyle := tcell.StyleDefault.Bold(true)

@@ -320,7 +320,7 @@ func (msg *UIMessage) DrawReactions(screen mauview.Screen, modernHeader bool) {
 
 	width, height := screen.Size()
 	diff := 1
-	if modernHeader && height == msg.Height(modernHeader) {
+	if modernHeader {
 		diff = 2
 	}
 
