@@ -58,7 +58,7 @@ type MainView struct {
 
 	// Subviews
 	roomView     *mauview.Box
-	roomListView *RoomList
+	roomListView *TagRoomListView
 
 	// Room control
 	currentRoom  *RoomView
@@ -98,7 +98,7 @@ func (ui *GomuksUI) NewMainView() mauview.Component {
 		config: ui.gmx.Config(),
 		parent: ui,
 	}
-	mainView.roomListView = NewRoomList(mainView)
+	mainView.roomListView = NewTagRoomListView(mainView)
 	mainView.cmdProcessor = NewCommandProcessor(mainView)
 
 	if led, err := beepberry.NewLED(); err == nil {
@@ -209,8 +209,6 @@ func (view *MainView) OpenSyncingModal() ifc.SyncingModal {
 }
 
 func (view *MainView) OnKeyEvent(event mauview.KeyEvent) bool {
-	view.BumpFocus(view.currentRoom)
-
 	if view.modal != nil {
 		return view.modal.OnKeyEvent(event)
 	}
@@ -318,6 +316,11 @@ func (view *MainView) switchRoom(tag string, room *rooms.Room, lock bool) {
 			roomView.UpdateUserList()
 			view.parent.Render()
 		}()
+	}
+
+	// Mark room read if room is displayed
+	if (view.displayState == CompactRoom) || (view.displayState == Full) {
+		view.BumpFocus(view.currentRoom)
 	}
 }
 

@@ -64,7 +64,7 @@ func (tnl TagNameList) Swap(i, j int) {
 	tnl[i], tnl[j] = tnl[j], tnl[i]
 }
 
-type RoomList struct {
+type TagRoomListView struct {
 	sync.RWMutex
 
 	parent *MainView
@@ -91,8 +91,8 @@ type RoomList struct {
 	selectedBackgroundColor tcell.Color
 }
 
-func NewRoomList(parent *MainView) *RoomList {
-	list := &RoomList{
+func NewTagRoomListView(parent *MainView) *TagRoomListView {
+	list := &TagRoomListView{
 		parent: parent,
 
 		isFocused: false,
@@ -112,7 +112,7 @@ func NewRoomList(parent *MainView) *RoomList {
 	return list
 }
 
-func (list *RoomList) Contains(roomID id.RoomID) bool {
+func (list *TagRoomListView) Contains(roomID id.RoomID) bool {
 	list.RLock()
 	defer list.RUnlock()
 	for _, trl := range list.items {
@@ -125,7 +125,7 @@ func (list *RoomList) Contains(roomID id.RoomID) bool {
 	return false
 }
 
-func (list *RoomList) Add(room *rooms.Room) {
+func (list *TagRoomListView) Add(room *rooms.Room) {
 	if room.IsReplaced() {
 		debug.Print(room.ID, "is replaced by", room.ReplacedBy(), "-> not adding to room list")
 		return
@@ -136,7 +136,7 @@ func (list *RoomList) Add(room *rooms.Room) {
 	}
 }
 
-func (list *RoomList) checkTag(tag string) {
+func (list *TagRoomListView) checkTag(tag string) {
 	index := list.indexTag(tag)
 
 	trl, ok := list.items[tag]
@@ -154,7 +154,7 @@ func (list *RoomList) checkTag(tag string) {
 	}
 }
 
-func (list *RoomList) AddToTag(tag rooms.RoomTag, room *rooms.Room) {
+func (list *TagRoomListView) AddToTag(tag rooms.RoomTag, room *rooms.Room) {
 	list.Lock()
 	defer list.Unlock()
 	trl, ok := list.items[tag.Tag]
@@ -166,13 +166,13 @@ func (list *RoomList) AddToTag(tag rooms.RoomTag, room *rooms.Room) {
 	list.checkTag(tag.Tag)
 }
 
-func (list *RoomList) Remove(room *rooms.Room) {
+func (list *TagRoomListView) Remove(room *rooms.Room) {
 	for _, tag := range list.tags {
 		list.RemoveFromTag(tag, room)
 	}
 }
 
-func (list *RoomList) RemoveFromTag(tag string, room *rooms.Room) {
+func (list *TagRoomListView) RemoveFromTag(tag string, room *rooms.Room) {
 	list.Lock()
 	defer list.Unlock()
 	trl, ok := list.items[tag]
@@ -212,7 +212,7 @@ func (list *RoomList) RemoveFromTag(tag string, room *rooms.Room) {
 	list.checkTag(tag)
 }
 
-func (list *RoomList) Bump(room *rooms.Room) {
+func (list *TagRoomListView) Bump(room *rooms.Room) {
 	list.RLock()
 	defer list.RUnlock()
 	for _, tag := range room.Tags() {
@@ -224,7 +224,7 @@ func (list *RoomList) Bump(room *rooms.Room) {
 	}
 }
 
-func (list *RoomList) Clear() {
+func (list *TagRoomListView) Clear() {
 	list.Lock()
 	defer list.Unlock()
 	list.items = make(map[string]*TagRoomList)
@@ -236,7 +236,7 @@ func (list *RoomList) Clear() {
 	list.selectedTag = ""
 }
 
-func (list *RoomList) SetSelected(tag string, room *rooms.Room) {
+func (list *TagRoomListView) SetSelected(tag string, room *rooms.Room) {
 	list.selected = room
 	list.selectedTag = tag
 	pos := list.index(tag, room)
@@ -251,19 +251,19 @@ func (list *RoomList) SetSelected(tag string, room *rooms.Room) {
 	debug.Print("Selecting", room.GetTitle(), "in", list.GetTagDisplayName(tag))
 }
 
-func (list *RoomList) HasSelected() bool {
+func (list *TagRoomListView) HasSelected() bool {
 	return list.selected != nil
 }
 
-func (list *RoomList) Selected() (string, *rooms.Room) {
+func (list *TagRoomListView) Selected() (string, *rooms.Room) {
 	return list.selectedTag, list.selected
 }
 
-func (list *RoomList) SelectedRoom() *rooms.Room {
+func (list *TagRoomListView) SelectedRoom() *rooms.Room {
 	return list.selected
 }
 
-func (list *RoomList) AddScrollOffset(offset int) {
+func (list *TagRoomListView) AddScrollOffset(offset int) {
 	list.scrollOffset += offset
 	contentHeight := list.ContentHeight()
 	if list.scrollOffset > contentHeight-list.height {
@@ -274,13 +274,13 @@ func (list *RoomList) AddScrollOffset(offset int) {
 	}
 }
 
-func (list *RoomList) First() (string, *rooms.Room) {
+func (list *TagRoomListView) First() (string, *rooms.Room) {
 	list.RLock()
 	defer list.RUnlock()
 	return list.first()
 }
 
-func (list *RoomList) first() (string, *rooms.Room) {
+func (list *TagRoomListView) first() (string, *rooms.Room) {
 	for _, tag := range list.tags {
 		trl := list.items[tag]
 		if trl.HasVisibleRooms() {
@@ -290,13 +290,13 @@ func (list *RoomList) first() (string, *rooms.Room) {
 	return "", nil
 }
 
-func (list *RoomList) Last() (string, *rooms.Room) {
+func (list *TagRoomListView) Last() (string, *rooms.Room) {
 	list.RLock()
 	defer list.RUnlock()
 	return list.last()
 }
 
-func (list *RoomList) last() (string, *rooms.Room) {
+func (list *TagRoomListView) last() (string, *rooms.Room) {
 	for tagIndex := len(list.tags) - 1; tagIndex >= 0; tagIndex-- {
 		tag := list.tags[tagIndex]
 		trl := list.items[tag]
@@ -307,7 +307,7 @@ func (list *RoomList) last() (string, *rooms.Room) {
 	return "", nil
 }
 
-func (list *RoomList) indexTag(tag string) int {
+func (list *TagRoomListView) indexTag(tag string) int {
 	for index, entry := range list.tags {
 		if tag == entry {
 			return index
@@ -316,7 +316,7 @@ func (list *RoomList) indexTag(tag string) int {
 	return -1
 }
 
-func (list *RoomList) Previous() (string, *rooms.Room) {
+func (list *TagRoomListView) Previous() (string, *rooms.Room) {
 	list.RLock()
 	defer list.RUnlock()
 	if len(list.items) == 0 {
@@ -351,7 +351,7 @@ func (list *RoomList) Previous() (string, *rooms.Room) {
 	return list.first()
 }
 
-func (list *RoomList) Next() (string, *rooms.Room) {
+func (list *TagRoomListView) Next() (string, *rooms.Room) {
 	list.RLock()
 	defer list.RUnlock()
 	if len(list.items) == 0 {
@@ -395,7 +395,7 @@ func (list *RoomList) Next() (string, *rooms.Room) {
 // - Other traffic (joins, parts, etc)
 //
 // TODO: Sorting. Now just finds first room with new messages.
-func (list *RoomList) NextWithActivity() (string, *rooms.Room) {
+func (list *TagRoomListView) NextWithActivity() (string, *rooms.Room) {
 	list.RLock()
 	defer list.RUnlock()
 	for tag, trl := range list.items {
@@ -409,7 +409,7 @@ func (list *RoomList) NextWithActivity() (string, *rooms.Room) {
 	return "", nil
 }
 
-func (list *RoomList) index(tag string, room *rooms.Room) int {
+func (list *TagRoomListView) index(tag string, room *rooms.Room) int {
 	tagIndex := list.indexTag(tag)
 	if tagIndex == -1 {
 		return -1
@@ -440,7 +440,7 @@ func (list *RoomList) index(tag string, room *rooms.Room) int {
 	return localIndex
 }
 
-func (list *RoomList) ContentHeight() (height int) {
+func (list *TagRoomListView) ContentHeight() (height int) {
 	list.RLock()
 	for _, tag := range list.tags {
 		height += list.items[tag].RenderHeight()
@@ -449,7 +449,7 @@ func (list *RoomList) ContentHeight() (height int) {
 	return
 }
 
-func (list *RoomList) OnKeyEvent(event mauview.KeyEvent) bool {
+func (list *TagRoomListView) OnKeyEvent(event mauview.KeyEvent) bool {
 
 	kb := config.Keybind{
 		Key: event.Key(),
@@ -483,11 +483,11 @@ func (list *RoomList) OnKeyEvent(event mauview.KeyEvent) bool {
 	return true
 }
 
-func (list *RoomList) OnPasteEvent(_ mauview.PasteEvent) bool {
+func (list *TagRoomListView) OnPasteEvent(_ mauview.PasteEvent) bool {
 	return false
 }
 
-func (list *RoomList) OnMouseEvent(event mauview.MouseEvent) bool {
+func (list *TagRoomListView) OnMouseEvent(event mauview.MouseEvent) bool {
 	if event.HasMotion() {
 		return false
 	}
@@ -505,15 +505,15 @@ func (list *RoomList) OnMouseEvent(event mauview.MouseEvent) bool {
 	return false
 }
 
-func (list *RoomList) Focus() {
+func (list *TagRoomListView) Focus() {
 	list.isFocused = true
 }
 
-func (list *RoomList) Blur() {
+func (list *TagRoomListView) Blur() {
 	list.isFocused = false
 }
 
-func (list *RoomList) clickRoom(line, column int, mod bool) bool {
+func (list *TagRoomListView) clickRoom(line, column int, mod bool) bool {
 	line += list.scrollOffset
 	if line < 0 {
 		return false
@@ -572,7 +572,7 @@ func (list *RoomList) clickRoom(line, column int, mod bool) bool {
 
 var nsRegex = regexp.MustCompile("^[a-z]+\\.[a-z]+(?:\\.[a-z]+)*$")
 
-func (list *RoomList) GetTagDisplayName(tag string) string {
+func (list *TagRoomListView) GetTagDisplayName(tag string) string {
 	switch {
 	case len(tag) == 0:
 		return "Rooms"
@@ -598,8 +598,13 @@ func (list *RoomList) GetTagDisplayName(tag string) string {
 }
 
 // Draw draws this primitive onto the screen.
-func (list *RoomList) Draw(screen mauview.Screen) {
+func (list *TagRoomListView) Draw(screen mauview.Screen) {
 	list.width, list.height = screen.Size()
+
+	if !list.parent.config.Preferences.TagGroupRooms {
+		return
+	}
+
 	y := 0
 	yLimit := y + list.height
 	y -= list.scrollOffset

@@ -49,6 +49,7 @@ type AuthCache struct {
 type UserPreferences struct {
 	HideUserList         bool `yaml:"hide_user_list"`
 	OverlayUserList      bool `yaml:"overlay_user_list"`
+	TagGroupRooms        bool `yaml:"tag_group_rooms"`
 	HideTimestamp        bool `yaml:"hide_timestamp"`
 	BareMessageView      bool `yaml:"bare_message_view"`
 	DisableImages        bool `yaml:"disable_images"`
@@ -161,6 +162,7 @@ func NewConfig(configDir, dataDir, cacheDir, downloadDir string) *Config {
 		Preferences: UserPreferences{
 			HideUserList: true,
 			OverlayUserList: true,
+			TagGroupRooms: false,
 			CompactWidth: 60,
 		},
 	}

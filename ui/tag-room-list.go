@@ -51,11 +51,11 @@ func NewDefaultOrderedRoom(room *rooms.Room) *OrderedRoom {
 	return NewOrderedRoom("0.5", room)
 }
 
-func (or *OrderedRoom) Draw(roomList *RoomList, screen mauview.Screen, x, y, lineWidth int,
+func (or *OrderedRoom) Draw(view *TagRoomListView, screen mauview.Screen, x, y, lineWidth int,
 	isActive bool, isHighlighted bool) {
 
 	style := tcell.StyleDefault.
-		Foreground(roomList.mainTextColor).
+		Foreground(view.mainTextColor).
 		Bold(or.HasNewMessages())
 	if isActive {
 		style = style.
@@ -64,8 +64,8 @@ func (or *OrderedRoom) Draw(roomList *RoomList, screen mauview.Screen, x, y, lin
 	}
 	if isHighlighted {
 		style = style.
-			Foreground(roomList.selectedTextColor).
-			Background(roomList.selectedBackgroundColor)
+			Foreground(view.selectedTextColor).
+			Background(view.selectedBackgroundColor)
 	}
 
 	unreadCount := or.UnreadCount()
@@ -97,10 +97,10 @@ type TagRoomList struct {
 	// The displayname of this tag
 	displayname string
 	// The parent RoomList instance
-	parent *RoomList
+	parent *TagRoomListView
 }
 
-func NewTagRoomList(parent *RoomList, name string, rooms ...*OrderedRoom) *TagRoomList {
+func NewTagRoomList(parent *TagRoomListView, name string, rooms ...*OrderedRoom) *TagRoomList {
 	return &TagRoomList{
 		maxShown:    10,
 		rooms:       rooms,
@@ -153,11 +153,19 @@ func (trl *TagRoomList) IsCollapsed() bool {
 	return trl.maxShown == 0
 }
 
+func (trl *TagRoomList) Collapse() {
+	trl.maxShown = 0
+}
+
+func (trl *TagRoomList) Uncollapse() {
+	trl.maxShown = 10
+}
+
 func (trl *TagRoomList) ToggleCollapse() {
 	if trl.IsCollapsed() {
-		trl.maxShown = 10
+		trl.Uncollapse()
 	} else {
-		trl.maxShown = 0
+		trl.Collapse()
 	}
 }
 
