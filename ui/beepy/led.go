@@ -1,60 +1,90 @@
 package beepy
 
 import (
+	"fmt"
 	"os"
-	"strconv"
+	"sync"
+)
+
+const ledPath = "/sys/firmware/beepy/led"
+const ledRedPath = "/sys/firmware/beepy/led_red"
+const ledBluePath = "/sys/firmware/beepy/led_blue"
+const ledGreenPath = "/sys/firmware/beepy/led_green"
+
+const (
+	ledSetOff = 0x00
+	ledSetOn = 0x01
+	ledSetFlash = 0x02
+	ledSetFlashUntilKey = 0x03
 )
 
 type LED struct {
-	level byte
-	r byte
-	g byte
-	b byte
+	lck sync.RWMutex
 }
 
 func NewLED() (*LED, error) {
-	return &LED{0, 0, 0, 0}, nil
+
+	// Ensure LED control path writable
+	file, err := os.OpenFile(ledPath, os.O_WRONLY, 0600)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	return &LED{}, nil
 }
 
-func (l *LED) Close() error {
+func writeInt(path string, value uint16) error {
+	file, err := os.OpenFile(path, os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	fmt.Fprintf(file, "%d\n", value)
 	return nil
 }
 
-func (l *LED) On() error {
-	l.level = 0xff
-	return os.WriteFile("/sys/firmware/beepy/led", []byte(strconv.Itoa(int(l.level)) + "\n"), 0220)
+func (l *LED) setNextColor(r, g, b uint16) error {
+	if err := writeInt(ledRedPath, r); err != nil {
+		return err
+	}
+
+	if err := writeInt(ledGreenPath, g); err != nil {
+		return err
+	}
+
+	if err := writeInt(ledBluePath, b); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (l *LED) On(r, g, b uint16) error {
+
+	l.lck.Lock()
+	defer l.lck.Unlock()
+
+	if err := l.setNextColor(r, g, b); err != nil {
+		return err
+	}
+
+	return writeInt(ledPath, ledSetOn)
+}
+
+func (l *LED) FlashUntilKey(r, g, b uint16) error {
+
+	l.lck.Lock()
+	defer l.lck.Unlock()
+
+	if err := l.setNextColor(r, g, b); err != nil {
+		return err
+	}
+
+	return writeInt(ledPath, ledSetFlashUntilKey)
 }
 
 func (l *LED) Off() error {
-	l.level = 0x0
-	return os.WriteFile("/sys/firmware/beepy/led", []byte(strconv.Itoa(int(l.level)) + "\n"), 0220)
-}
-
-func (l *LED) SetColor(r, g, b uint16) error {
-
-	l.r = byte(r)
-	l.g = byte(g)
-	l.b = byte(b)
-
-	if err := os.WriteFile("/sys/firmware/beepy/led_red", []byte(strconv.Itoa(int(l.r)) + "\n"), 0220); err != nil {
-		return err
-	}
-
-	if err := os.WriteFile("/sys/firmware/beepy/led_green", []byte(strconv.Itoa(int(l.g)) + "\n"), 0220); err != nil {
-		return err
-	}
-
-	if err := os.WriteFile("/sys/firmware/beepy/led_blue", []byte(strconv.Itoa(int(l.b)) + "\n"), 0220); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (l *LED) IsOn() (bool, error) {
-	return l.level > 0, nil
-}
-
-func (l *LED) Color() ([]byte, error) {
-	return []byte{l.r, l.g, l.b}, nil
+	return writeInt(ledPath, ledSetOff)
 }
