@@ -271,7 +271,11 @@ func (view *MainView) Reflow() {
 	if view.screenWidth > view.config.Preferences.CompactWidth {
 		view.SetDisplayState(Full)
 	} else {
-		view.SetDisplayState(CompactRoom)
+		if view.roomListView.HasSelected() {
+			view.SetDisplayState(CompactRoom)
+		} else {
+			view.SetDisplayState(CompactRoomList)
+		}
 	}
 }
 
@@ -465,6 +469,9 @@ func (view *MainView) NotifyMessage(room *rooms.Room, message ifc.Message, shoul
 			should.SoundName == "default" &&
 			view.config.NotifySound
 		sendNotification(room, message.NotificationSenderName(), message.NotificationContent(), should.Highlight, shouldPlaySound)
+		if shouldPlaySound {
+			go view.FlashLED(0xFF, 0xFF, 0xFF)
+		}
 	}
 
 	// TODO this should probably happen somewhere else

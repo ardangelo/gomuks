@@ -171,6 +171,9 @@ func (hrlv *HubRoomListView) SetSelected(tag string, room *rooms.Room) {
 
 	// Update render start index
 	renderableIndices := (hrlv.height - 2) / 2 - 1
+	if renderableIndices < 0 {
+		renderableIndices = 1
+	}
 	if index < hrlv.renderStartIndex {
 		hrlv.renderStartIndex = index
 	} else if hrlv.renderStartIndex + renderableIndices <= index {
@@ -182,6 +185,7 @@ func (hrlv *HubRoomListView) SetSelected(tag string, room *rooms.Room) {
 	if hrlv.renderStartIndex < 0 {
 		hrlv.renderStartIndex = 0
 	}
+	debug.Print("Render start index for ", index, ": ", hrlv.renderStartIndex)
 }
 
 func (hrlv *HubRoomListView) HasSelected() bool {
@@ -413,7 +417,9 @@ func (hrlv *HubRoomListView) Draw(screen mauview.Screen) {
 		if isSelected {
 			msgStyle = msgStyle.Italic(true)
 			if hrlv.isFocused {
-				msgStyle = msgStyle.Background(tcell.ColorWhite)
+				msgStyle = msgStyle.
+					Foreground(tcell.ColorBlack).
+					Background(tcell.ColorWhite)
 			}
 			startingX += 2
 
@@ -450,5 +456,5 @@ func (hubRoom *HubRoom) GetLatestMessage(hrlv *HubRoomListView) (string, bool) {
 		}
 	}
 
-	return "It's quite empty in here.", false
+	return "", false
 }

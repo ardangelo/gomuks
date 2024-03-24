@@ -952,7 +952,6 @@ func (view *RoomView) UpdateUserList() {
 
 func (view *RoomView) AddServiceMessage(text string) {
 	view.content.AddMessage(messages.NewServiceMessage(text), AppendMessage)
-	go view.parent.FlashLED(0x00, 0xFF, 0x00)
 }
 
 func (view *RoomView) parseEvent(evt *muksevt.Event) *messages.UIMessage {
@@ -968,7 +967,6 @@ func (view *RoomView) AddHistoryEvent(evt *muksevt.Event) {
 func (view *RoomView) AddEvent(evt *muksevt.Event) ifc.Message {
 	if msg := view.parseEvent(evt); msg != nil {
 		view.content.AddMessage(msg, AppendMessage)
-		go view.parent.FlashLED(0xFF, 0xFF, 0xFF)
 		return msg
 	}
 	return nil
@@ -976,20 +974,17 @@ func (view *RoomView) AddEvent(evt *muksevt.Event) ifc.Message {
 
 func (view *RoomView) AddRedaction(redactedEvt *muksevt.Event) {
 	view.AddEvent(redactedEvt)
-	go view.parent.FlashLED(0xFF, 0x00, 0x00)
 }
 
 func (view *RoomView) AddEdit(evt *muksevt.Event) {
 	if msg := view.parseEvent(evt); msg != nil {
 		view.content.AddMessage(msg, IgnoreMessage)
-		go view.parent.FlashLED(0xFF, 0xFF, 0x00)
 	}
 }
 
 func (view *RoomView) AddReaction(evt *muksevt.Event, key string) {
 	msgView := view.MessageView()
 	msg := msgView.getMessageByID(evt.ID)
-	go view.parent.FlashLED(0xFF, 0x00, 0xFF)
 	if msg == nil {
 		// Message not in view, nothing to do
 		return
