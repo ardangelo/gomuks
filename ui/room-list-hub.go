@@ -52,6 +52,7 @@ type HubRoomListView struct {
 	hubRooms []*HubRoom
 	selected *HubRoom
 	selectedTag string
+	renderStartIndex int
 
 	// The item main text color.
 	mainTextColor tcell.Color
@@ -66,6 +67,7 @@ func NewHubRoomListView(parent *MainView) *HubRoomListView {
 		parent: parent,
 
 		isFocused: false,
+		renderStartIndex: 0,
 
 		mainTextColor:           tcell.ColorDefault,
 		selectedTextColor:       tcell.ColorWhite,
@@ -165,7 +167,21 @@ func (hrlv *HubRoomListView) SetSelected(tag string, room *rooms.Room) {
 	if index < 0 || index >= len(hrlv.hubRooms) {
 		return
 	}
-	hrlv.selected  = hrlv.hubRooms[index]
+	hrlv.selected = hrlv.hubRooms[index]
+
+	// Update render start index
+	renderableIndices := (hrlv.height - 2) / 2 - 1
+	if index < hrlv.renderStartIndex {
+		hrlv.renderStartIndex = index
+	} else if hrlv.renderStartIndex + renderableIndices <= index {
+		hrlv.renderStartIndex = index - renderableIndices
+	}
+	for hrlv.renderStartIndex >= len(hrlv.hubRooms) {
+		hrlv.renderStartIndex -= renderableIndices
+	}
+	if hrlv.renderStartIndex < 0 {
+		hrlv.renderStartIndex = 0
+	}
 }
 
 func (hrlv *HubRoomListView) HasSelected() bool {
@@ -346,7 +362,7 @@ func (hrlv *HubRoomListView) Draw(screen mauview.Screen) {
 		return
 	}
 
-	for _, hubRoom := range hrlv.hubRooms {
+	for _, hubRoom := range hrlv.hubRooms[hrlv.renderStartIndex:] {
 		if hubRoom.mxRoom.IsReplaced() {
 			continue
 		}
@@ -362,10 +378,11 @@ func (hrlv *HubRoomListView) Draw(screen mauview.Screen) {
 			Foreground(tcell.ColorDefault).
 			Bold(hubRoom.mxRoom.HasNewMessages())
 		if isSelected {
-			style = style.
-				Foreground(tcell.ColorBlack).
-				Background(tcell.ColorWhite).
-				Italic(true)
+			style = style.Italic(true)
+			if hrlv.isFocused {
+				style = style.Foreground(tcell.ColorBlack).
+					Background(tcell.ColorWhite)
+			}
 		}
 
 		timestamp := hubRoom.mxRoom.LastReceivedMessage
@@ -382,20 +399,23 @@ func (hrlv *HubRoomListView) Draw(screen mauview.Screen) {
 
 		lastMessage, received := hubRoom.GetLatestMessage(hrlv)
 		msgStyle := style.Foreground(tcell.ColorGray).Italic(!received)
-		startingX := 2
+		startingX := 0
 
 		if isSelected {
 			lastMessage = "  " + lastMessage
-			msgStyle = msgStyle.Background(tcell.ColorWhite).Italic(true)
+			msgStyle = msgStyle.Italic(true)
+			if hrlv.isFocused {
+				msgStyle = msgStyle.Background(tcell.ColorWhite)
+			}
 			startingX += 2
 
-			widget.WriteLine(screen, mauview.AlignLeft, string(tcell.RuneDiamond)+" ", 2, y, 4, style)
+			widget.WriteLine(screen, mauview.AlignLeft, string(tcell.RuneDiamond)+" ", 0, y, 4, style)
 		}
 
 		tmX := hrlv.width - len(tm)
 		widget.WriteLinePadded(screen, mauview.AlignLeft, hubRoom.mxRoom.GetTitle(), startingX, y, tmX, style)
 		widget.WriteLine(screen, mauview.AlignLeft, tm, tmX, y, startingX+len(tm), style)
-		widget.WriteLinePadded(screen, mauview.AlignLeft, lastMessage, 0, y+1, hrlv.width-5, msgStyle)
+		widget.WriteLinePadded(screen, mauview.AlignLeft, lastMessage, 0, y+1, hrlv.width, msgStyle)
 
 		y += renderHeight
 		if y >= hrlv.height {
