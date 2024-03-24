@@ -19,6 +19,8 @@ package ifc
 import (
 	"time"
 
+	"go.mau.fi/mauview"
+
 	"maunium.net/go/gomuks/matrix/muksevt"
 	"maunium.net/go/gomuks/matrix/rooms"
 	"maunium.net/go/mautrix/id"
@@ -61,6 +63,31 @@ type MainView interface {
 	OpenSyncingModal() SyncingModal
 
 	NotifyMessage(room *rooms.Room, message Message, should pushrules.PushActionArrayShould)
+}
+
+type RoomListView interface {
+	GetView() mauview.FocusableComponent
+	Contains(roomID id.RoomID) bool
+	Add(room *rooms.Room)
+	AddToTag(tag rooms.RoomTag, room *rooms.Room)
+	Remove(room *rooms.Room)
+	RemoveFromTag(tag string, room *rooms.Room)
+	Bump(room *rooms.Room)
+	Clear()
+	SetSelected(tag string, room *rooms.Room)
+	HasSelected() bool
+	Selected() (string, *rooms.Room)
+	SelectedRoom() *rooms.Room
+	First() (string, *rooms.Room)
+	Last() (string, *rooms.Room)
+	Previous() (string, *rooms.Room)
+	Next() (string, *rooms.Room)
+	NextWithActivity() (string, *rooms.Room)
+
+	// FocusableComponent
+	OnKeyEvent(event mauview.KeyEvent) bool
+	OnPasteEvent(_ mauview.PasteEvent) bool
+	OnMouseEvent(event mauview.MouseEvent) bool
 }
 
 type RoomView interface {

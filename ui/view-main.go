@@ -26,7 +26,6 @@ import (
 	sync "github.com/sasha-s/go-deadlock"
 
 	"go.mau.fi/mauview"
-	"go.mau.fi/tcell"
 
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/pushrules"
@@ -38,38 +37,60 @@ import (
 	"maunium.net/go/gomuks/matrix/rooms"
 	"maunium.net/go/gomuks/ui/beepy"
 	"maunium.net/go/gomuks/ui/messages"
+
 	"maunium.net/go/gomuks/ui/widget"
 )
 
-type MainView struct {
-	flex *mauview.Flex
+type DisplayState int
+const (
+	CompactRoomList DisplayState = iota
+	CompactRoom
+	Full
+)
 
-	roomList     *RoomList
+type MainView struct {
+
+	// Views
+	modal mauview.Component
+	flex *mauview.Flex
+	screenWidth int
+	displayState DisplayState
+
+	// Subviews
 	roomView     *mauview.Box
-	rosterView   *RosterView
+	roomListView ifc.RoomListView
+
+	// Room control
 	currentRoom  *RoomView
 	rooms        map[id.RoomID]*RoomView
 	roomsLock    sync.RWMutex
-	cmdProcessor *CommandProcessor
-	focused      mauview.Focusable
 
-	modal mauview.Component
-
+	// Focus control
+	focusedBelowModal mauview.Focusable
 	lastFocusTime time.Time
+	
+	// Command proessor
+	cmdProcessor *CommandProcessor
 
+	// Hardware control
 	led     *beepy.LED
-	ledLock sync.RWMutex
 
+	// Gomuks control
 	matrix ifc.MatrixContainer
 	gmx    ifc.Gomuks
 	config *config.Config
+
 	parent *GomuksUI
 }
 
 func (ui *GomuksUI) NewMainView() mauview.Component {
 	mainView := &MainView{
-		flex:     mauview.NewFlex().SetDirection(mauview.FlexColumn),
+
+		flex: mauview.NewFlex().SetDirection(mauview.FlexColumn),
+		displayState: CompactRoomList,
+
 		roomView: mauview.NewBox(nil).SetBorder(false),
+
 		rooms:    make(map[id.RoomID]*RoomView),
 
 		matrix: ui.gmx.Matrix(),
@@ -77,18 +98,17 @@ func (ui *GomuksUI) NewMainView() mauview.Component {
 		config: ui.gmx.Config(),
 		parent: ui,
 	}
-	mainView.roomList = NewRoomList(mainView)
-	mainView.rosterView = NewRosterView(mainView)
+	if mainView.config.Preferences.TagGroupRooms {
+		mainView.roomListView = NewTagRoomListView(mainView)
+	} else {
+		mainView.roomListView = NewHubRoomListView(mainView)
+	}
 	mainView.cmdProcessor = NewCommandProcessor(mainView)
 
 	if led, err := beepy.NewLED(); err == nil {
 		mainView.led = led
 	}
 
-	mainView.flex.
-		AddFixedComponent(mainView.roomList, 25).
-		AddFixedComponent(widget.NewBorder(), 1).
-		AddProportionalComponent(mainView.roomView, 1)
 	mainView.BumpFocus(nil)
 
 	ui.mainView = mainView
@@ -105,41 +125,39 @@ func (view *MainView) FlashLED(r, g, b uint16) {
 		return
 	}
 
-	view.ledLock.Lock()
-	defer view.ledLock.Unlock()
-
-	view.led.SetColor(r, g, b)
-	view.led.On()
-	time.Sleep(time.Second)
-	view.led.Off()
-	view.led.SetColor(0xFF, 0xFF, 0xFF)
+	view.led.FlashUntilKey(r, g, b)
 }
 
 func (view *MainView) ShowModal(modal mauview.Component) {
 	view.modal = modal
+	view.flex.Blur()
 	var ok bool
-	view.focused, ok = modal.(mauview.Focusable)
-	if !ok {
-		view.focused = nil
-	} else {
-		view.focused.Focus()
+	view.focusedBelowModal, ok = modal.(mauview.Focusable)
+	if ok {
+		view.focusedBelowModal.Focus()
 	}
 }
 
 func (view *MainView) HideModal() {
 	view.modal = nil
-	view.focused = view.roomView
+	view.focusedBelowModal.Focus()
+	view.focusedBelowModal = nil
 }
 
 func (view *MainView) Draw(screen mauview.Screen) {
-	if view.config.Preferences.DisplayMode == config.DisplayModeModern {
-		view.rosterView.Draw(screen)
-	} else if view.config.Preferences.HideRoomList {
-		view.roomView.Draw(screen)
-	} else {
-		view.flex.Draw(screen)
+
+	// Determine if interface should be reflowed
+	// TODO: Is there a resize handler?
+	width, _ := screen.Size()
+	if width != view.screenWidth {
+		view.screenWidth = width
+		view.Reflow()
 	}
 
+	// Draw entire flex view
+	view.flex.Draw(screen)
+
+	// Draw modal last
 	if view.modal != nil {
 		view.modal.Draw(screen)
 	}
@@ -195,46 +213,10 @@ func (view *MainView) OpenSyncingModal() ifc.SyncingModal {
 }
 
 func (view *MainView) OnKeyEvent(event mauview.KeyEvent) bool {
-	view.BumpFocus(view.currentRoom)
-
 	if view.modal != nil {
 		return view.modal.OnKeyEvent(event)
-	} else if view.config.Preferences.DisplayMode == config.DisplayModeModern {
-		return view.rosterView.OnKeyEvent(event)
 	}
 
-	kb := config.Keybind{
-		Key: event.Key(),
-		Ch:  event.Rune(),
-		Mod: event.Modifiers(),
-	}
-	switch view.config.Keybindings.Main[kb] {
-	case "next_room":
-		view.SwitchRoom(view.roomList.Next())
-	case "prev_room":
-		view.SwitchRoom(view.roomList.Previous())
-	case "search_rooms":
-		view.ShowModal(NewFuzzySearchModal(view, 42, 12))
-	case "scroll_up":
-		msgView := view.currentRoom.MessageView()
-		msgView.AddScrollOffset(msgView.TotalHeight())
-	case "scroll_down":
-		msgView := view.currentRoom.MessageView()
-		msgView.AddScrollOffset(-msgView.TotalHeight())
-	case "add_newline":
-		return view.flex.OnKeyEvent(tcell.NewEventKey(tcell.KeyEnter, '\n', event.Modifiers()|tcell.ModShift))
-	case "next_active_room":
-		view.SwitchRoom(view.roomList.NextWithActivity())
-	case "show_bare":
-		view.ShowBare(view.currentRoom)
-	default:
-		goto defaultHandler
-	}
-	return true
-defaultHandler:
-	if view.config.Preferences.HideRoomList {
-		return view.roomView.OnKeyEvent(event)
-	}
 	return view.flex.OnKeyEvent(event)
 }
 
@@ -244,33 +226,59 @@ func (view *MainView) OnMouseEvent(event mauview.MouseEvent) bool {
 	if view.modal != nil {
 		return view.modal.OnMouseEvent(event)
 	}
-	if view.config.Preferences.DisplayMode == config.DisplayModeModern {
-		return view.rosterView.OnMouseEvent(event)
-	}
-	if view.config.Preferences.HideRoomList {
-		return view.roomView.OnMouseEvent(event)
-	}
 	return view.flex.OnMouseEvent(event)
 }
 
 func (view *MainView) OnPasteEvent(event mauview.PasteEvent) bool {
 	if view.modal != nil {
 		return view.modal.OnPasteEvent(event)
-	} else if view.config.Preferences.HideRoomList {
-		return view.roomView.OnPasteEvent(event)
 	}
 	return view.flex.OnPasteEvent(event)
 }
 
 func (view *MainView) Focus() {
-	if view.focused != nil {
-		view.focused.Focus()
-	}
+	view.flex.Focus()
 }
 
 func (view *MainView) Blur() {
-	if view.focused != nil {
-		view.focused.Blur()
+	view.flex.Blur()
+}
+
+// Component must be added to flex already
+func (view *MainView) SetFlexFocused(comp mauview.FocusableComponent) {
+	view.flex.Blur()
+	view.flex.SetFocused(comp)
+}
+
+func (view *MainView) SetDisplayState(displayState DisplayState) {
+
+	view.displayState = displayState
+
+	view.flex.Blur()
+	view.flex = mauview.NewFlex().SetDirection(mauview.FlexColumn)
+
+	switch view.displayState {
+
+	case CompactRoomList:
+		view.flex.AddProportionalComponent(view.roomListView.GetView(), 1)
+		view.flex.SetFocused(view.roomListView.GetView())
+	case CompactRoom:
+		view.flex.AddProportionalComponent(view.roomView, 1)
+		view.flex.SetFocused(view.roomView)
+	default:
+		view.flex.AddFixedComponent(view.roomListView.GetView(), 25).
+			AddFixedComponent(widget.NewBorder(), 1).
+			AddProportionalComponent(view.roomView, 1)
+		view.flex.SetFocused(view.roomView)
+	}
+}
+
+func (view *MainView) Reflow() {
+
+	if view.screenWidth > view.config.Preferences.CompactWidth {
+		view.SetDisplayState(Full)
+	} else {
+		view.SetDisplayState(CompactRoom)
 	}
 }
 
@@ -294,10 +302,8 @@ func (view *MainView) switchRoom(tag string, room *rooms.Room, lock bool) {
 	view.roomView.SetInnerComponent(roomView)
 	view.currentRoom = roomView
 	view.MarkRead(roomView)
-	view.roomList.SetSelected(tag, room)
-	view.flex.SetFocused(view.roomView)
-	view.focused = view.roomView
-	view.roomView.Focus()
+	view.roomListView.SetSelected(tag, room)
+
 	view.parent.Render()
 
 	if msgView := roomView.MessageView(); len(msgView.messages) < 20 && !msgView.initialHistoryLoaded {
@@ -314,6 +320,11 @@ func (view *MainView) switchRoom(tag string, room *rooms.Room, lock bool) {
 			roomView.UpdateUserList()
 			view.parent.Render()
 		}()
+	}
+
+	// Mark room read if room is displayed
+	if (view.displayState == CompactRoom) || (view.displayState == Full) {
+		view.BumpFocus(view.currentRoom)
 	}
 }
 
@@ -360,9 +371,8 @@ func (view *MainView) RemoveRoom(room *rooms.Room) {
 	}
 	debug.Print("Removing", room.ID, room.GetTitle())
 
-	view.rosterView.Remove(room)
-	view.roomList.Remove(room)
-	t, r := view.roomList.Selected()
+	view.roomListView.Remove(room)
+	t, r := view.roomListView.Selected()
 	view.switchRoom(t, r, false)
 	delete(view.rooms, room.ID)
 	view.roomsLock.Unlock()
@@ -371,17 +381,16 @@ func (view *MainView) RemoveRoom(room *rooms.Room) {
 }
 
 func (view *MainView) addRoom(room *rooms.Room) *RoomView {
-	if view.roomList.Contains(room.ID) {
+	if view.roomListView.Contains(room.ID) {
 		debug.Print("Add aborted (room exists)", room.ID, room.GetTitle())
 		return nil
 	}
 	debug.Print("Adding", room.ID, room.GetTitle())
-	view.roomList.Add(room)
-	view.rosterView.Add(room)
+	view.roomListView.Add(room)
 	view.roomsLock.Lock()
 	roomView := view.addRoomPage(room)
-	if !view.roomList.HasSelected() {
-		t, r := view.roomList.First()
+	if !view.roomListView.HasSelected() {
+		t, r := view.roomListView.First()
 		view.switchRoom(t, r, false)
 	}
 	view.roomsLock.Unlock()
@@ -389,31 +398,31 @@ func (view *MainView) addRoom(room *rooms.Room) *RoomView {
 }
 
 func (view *MainView) SetRooms(rooms *rooms.RoomCache) {
-	view.roomList.Clear()
+	view.roomListView.Clear()
 	view.roomsLock.Lock()
 	view.rooms = make(map[id.RoomID]*RoomView)
 	for _, room := range rooms.Map {
 		if room.HasLeft {
 			continue
 		}
-		view.roomList.Add(room)
-		view.rosterView.Add(room)
+		view.roomListView.Add(room)
 		view.addRoomPage(room)
 	}
-	t, r := view.roomList.First()
+	t, r := view.roomListView.First()
 	view.switchRoom(t, r, false)
 	view.roomsLock.Unlock()
 }
 
 func (view *MainView) UpdateTags(room *rooms.Room) {
-	if !view.roomList.Contains(room.ID) {
+	if !view.roomListView.Contains(room.ID) {
 		return
 	}
-	reselect := view.roomList.selected == room
-	view.roomList.Remove(room)
-	view.roomList.Add(room)
+	_, selectedRoom := view.roomListView.Selected()
+	reselect := selectedRoom == room
+	view.roomListView.Remove(room)
+	view.roomListView.Add(room)
 	if reselect {
-		view.roomList.SetSelected(room.Tags()[0].Tag, room)
+		view.roomListView.SetSelected(room.Tags()[0].Tag, room)
 	}
 	view.parent.Render()
 }
@@ -435,8 +444,7 @@ func sendNotification(room *rooms.Room, sender, text string, critical, sound boo
 }
 
 func (view *MainView) Bump(room *rooms.Room) {
-	view.roomList.Bump(room)
-	view.rosterView.Bump(room)
+	view.roomListView.Bump(room)
 }
 
 func (view *MainView) NotifyMessage(room *rooms.Room, message ifc.Message, should pushrules.PushActionArrayShould) {
@@ -446,7 +454,7 @@ func (view *MainView) NotifyMessage(room *rooms.Room, message ifc.Message, shoul
 		return
 	}
 	// Whether or not the room where the message came is the currently shown room.
-	isCurrent := room == view.roomList.SelectedRoom()
+	isCurrent := room == view.roomListView.SelectedRoom()
 	// Whether or not the terminal window is focused.
 	recentlyFocused := time.Now().Add(-30 * time.Second).Before(view.lastFocusTime)
 	isFocused := time.Now().Add(-5 * time.Second).Before(view.lastFocusTime)
@@ -500,4 +508,8 @@ func (view *MainView) LoadHistory(roomID id.RoomID) {
 		roomView.AddHistoryEvent(evt)
 	}
 	view.parent.Render()
+}
+
+func (view *MainView) CompactMode() (bool) {
+	return (view.displayState == CompactRoomList) || (view.displayState == CompactRoom)
 }

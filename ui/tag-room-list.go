@@ -51,14 +51,21 @@ func NewDefaultOrderedRoom(room *rooms.Room) *OrderedRoom {
 	return NewOrderedRoom("0.5", room)
 }
 
-func (or *OrderedRoom) Draw(roomList *RoomList, screen mauview.Screen, x, y, lineWidth int, isSelected bool) {
+func (or *OrderedRoom) Draw(view *TagRoomListView, screen mauview.Screen, x, y, lineWidth int,
+	isActive bool, isHighlighted bool) {
+
 	style := tcell.StyleDefault.
-		Foreground(roomList.mainTextColor).
+		Foreground(view.mainTextColor).
 		Bold(or.HasNewMessages())
-	if isSelected {
+	if isActive {
 		style = style.
-			Foreground(roomList.selectedTextColor).
-			Background(roomList.selectedBackgroundColor)
+			Bold(true).
+			Underline(true)
+	}
+	if isHighlighted {
+		style = style.
+			Foreground(view.selectedTextColor).
+			Background(view.selectedBackgroundColor)
 	}
 
 	unreadCount := or.UnreadCount()
@@ -90,10 +97,10 @@ type TagRoomList struct {
 	// The displayname of this tag
 	displayname string
 	// The parent RoomList instance
-	parent *RoomList
+	parent *TagRoomListView
 }
 
-func NewTagRoomList(parent *RoomList, name string, rooms ...*OrderedRoom) *TagRoomList {
+func NewTagRoomList(parent *TagRoomListView, name string, rooms ...*OrderedRoom) *TagRoomList {
 	return &TagRoomList{
 		maxShown:    10,
 		rooms:       rooms,
@@ -146,11 +153,19 @@ func (trl *TagRoomList) IsCollapsed() bool {
 	return trl.maxShown == 0
 }
 
+func (trl *TagRoomList) Collapse() {
+	trl.maxShown = 0
+}
+
+func (trl *TagRoomList) Uncollapse() {
+	trl.maxShown = 10
+}
+
 func (trl *TagRoomList) ToggleCollapse() {
 	if trl.IsCollapsed() {
-		trl.maxShown = 10
+		trl.Uncollapse()
 	} else {
-		trl.maxShown = 0
+		trl.Collapse()
 	}
 }
 
@@ -313,8 +328,9 @@ func (trl *TagRoomList) Draw(screen mauview.Screen) {
 		item := items[i]
 
 		lineWidth := width
-		isSelected := trl.name == trl.parent.selectedTag && item.Room == trl.parent.selected
-		item.Draw(trl.parent, screen, 0, y, lineWidth, isSelected)
+		isActive := trl.name == trl.parent.selectedTag && item.Room == trl.parent.selected
+		isHighlighted := trl.parent.isFocused && isActive
+		item.Draw(trl.parent, screen, 0, y, lineWidth, isActive, isHighlighted)
 		y++
 	}
 	hasLess := trl.maxShown > 10

@@ -45,7 +45,6 @@ import (
 	"maunium.net/go/gomuks/matrix/muksevt"
 	"maunium.net/go/gomuks/matrix/rooms"
 	"maunium.net/go/gomuks/ui/messages"
-	"maunium.net/go/gomuks/ui/widget"
 )
 
 type RoomView struct {
@@ -53,7 +52,6 @@ type RoomView struct {
 	content  *MessageView
 	status   *mauview.TextField
 	userList *MemberList
-	ulBorder *widget.Border
 	input    *mauview.InputArea
 	Room     *rooms.Room
 
@@ -61,7 +59,6 @@ type RoomView struct {
 	contentScreen  *mauview.ProxyScreen
 	statusScreen   *mauview.ProxyScreen
 	inputScreen    *mauview.ProxyScreen
-	ulBorderScreen *mauview.ProxyScreen
 	ulScreen       *mauview.ProxyScreen
 
 	userListLoaded bool
@@ -90,11 +87,12 @@ type RoomView struct {
 }
 
 func NewRoomView(parent *MainView, room *rooms.Room) *RoomView {
+
+	// Initialize room view
 	view := &RoomView{
 		topic:    mauview.NewTextView(),
 		status:   mauview.NewTextField(),
 		userList: NewMemberList(),
-		ulBorder: widget.NewBorder(),
 		input:    mauview.NewInputArea(),
 		Room:     room,
 
@@ -102,12 +100,15 @@ func NewRoomView(parent *MainView, room *rooms.Room) *RoomView {
 		contentScreen:  &mauview.ProxyScreen{OffsetX: 0, OffsetY: StatusBarHeight},
 		statusScreen:   &mauview.ProxyScreen{OffsetX: 0, Height: StatusBarHeight},
 		inputScreen:    &mauview.ProxyScreen{OffsetX: 0},
-		ulBorderScreen: &mauview.ProxyScreen{OffsetY: StatusBarHeight, Width: UserListBorderWidth},
 		ulScreen:       &mauview.ProxyScreen{OffsetY: StatusBarHeight, Width: UserListWidth},
+
+		userListLoaded: false,
 
 		parent: parent,
 		config: parent.config,
 	}
+
+	// Initialize message subview
 	view.content = NewMessageView(view)
 	view.Room.SetPreUnload(func() bool {
 		if view.parent.currentRoom == view {
@@ -118,6 +119,7 @@ func NewRoomView(parent *MainView, room *rooms.Room) *RoomView {
 	})
 	view.Room.SetPostLoad(view.loadTyping)
 
+	// Initialize text input box
 	view.input.
 		SetTextColor(tcell.ColorDefault).
 		SetBackgroundColor(tcell.ColorDefault).
@@ -126,16 +128,17 @@ func NewRoomView(parent *MainView, room *rooms.Room) *RoomView {
 		SetTabCompleteFunc(view.InputTabComplete).
 		SetPressKeyUpAtStartFunc(view.EditPrevious).
 		SetPressKeyDownAtEndFunc(view.EditNext)
-
 	if room.Encrypted {
 		view.input.SetPlaceholder("Send an encrypted message...")
 	}
 
+	// Initialize topic
 	// TODO: update when displaymode toggled
 	view.topic.
 		SetTextColor(tcell.ColorWhite).
 		SetBackgroundColor(tcell.ColorDarkGreen)
 
+	// Initialize background
 	view.status.SetBackgroundColor(tcell.ColorDimGray)
 
 	return view
@@ -266,9 +269,7 @@ func (view *RoomView) GetStatus() string {
 
 // Constants defining the size of the room view grid.
 const (
-	UserListBorderWidth   = 1
-	UserListWidth         = 20
-	StaticHorizontalSpace = UserListBorderWidth + UserListWidth
+	UserListWidth = 20
 
 	TopicBarHeight  = 1
 	StatusBarHeight = 1
@@ -277,78 +278,113 @@ const (
 )
 
 func (view *RoomView) Draw(screen mauview.Screen) {
-	width, height := screen.Size()
-	if width <= 0 || height <= 0 {
+
+	screenWidth, screenHeight := screen.Size()
+	if screenWidth <= 0 || screenHeight <= 0 {
 		return
 	}
 
+	// Update subviews' parent screen if changed
 	if view.prevScreen != screen {
 		view.topicScreen.Parent = screen
 		view.contentScreen.Parent = screen
 		view.statusScreen.Parent = screen
 		view.inputScreen.Parent = screen
-		view.ulBorderScreen.Parent = screen
 		view.ulScreen.Parent = screen
 		view.prevScreen = screen
 	}
 
-	view.input.PrepareDraw(width)
+	// Size topic bar across top of screen
+	view.topicScreen.Height = TopicBarHeight
+	view.topicScreen.Width = screenWidth
+
+	// Size status bar across screen
+	view.statusScreen.Width = screenWidth
+
+	// Size input box across bottom of screen
+	view.input.PrepareDraw(screenWidth)
+	// Clamp input height to [1, MaxInputHeight]
 	inputHeight := view.input.GetTextHeight()
 	if inputHeight > MaxInputHeight {
 		inputHeight = MaxInputHeight
 	} else if inputHeight < 1 {
 		inputHeight = 1
 	}
-	contentHeight := height - inputHeight - TopicBarHeight - StatusBarHeight
-	contentWidth := width - StaticHorizontalSpace
-	if view.config.Preferences.HideUserList || view.config.Preferences.DisplayMode == config.DisplayModeModern {
-		contentWidth = width
-	}
-
-	if view.config.Preferences.DisplayMode == config.DisplayModeModern {
-		view.topicScreen.Height = 2
-		view.contentScreen.OffsetY = 2
-		contentHeight--
-
-		view.topic.
-			SetTextColor(tcell.ColorDefault).
-			SetBackgroundColor(tcell.ColorDefault).
-			SetTextAlign(mauview.AlignCenter)
-	} else {
-		view.topicScreen.Height = TopicBarHeight
-		view.contentScreen.OffsetY = StatusBarHeight
-
-		view.topic.
-			SetTextColor(tcell.ColorWhite).
-			SetBackgroundColor(tcell.ColorDarkGreen).
-			SetTextAlign(mauview.AlignLeft)
-	}
-
-	view.topicScreen.Width = width
-	view.contentScreen.Width = contentWidth
-	view.contentScreen.Height = contentHeight
-	view.statusScreen.OffsetY = view.contentScreen.YEnd()
-	view.statusScreen.Width = width
-	view.inputScreen.Width = width
-	view.inputScreen.OffsetY = view.statusScreen.YEnd()
+	view.inputScreen.Width = screenWidth
 	view.inputScreen.Height = inputHeight
-	view.ulBorderScreen.OffsetX = view.contentScreen.XEnd()
-	view.ulBorderScreen.Height = contentHeight
-	view.ulScreen.OffsetX = view.ulBorderScreen.XEnd()
-	view.ulScreen.Height = contentHeight
 
-	// Draw everything
+	// Determine if status bar should be shown
+	statusText := view.GetStatus()
+	drawStatusBar := !view.parent.CompactMode() ||
+		(view.parent.CompactMode() && len(statusText) > 0)
+
+	// Size content to fill between topic & status bar, input box
+	view.contentScreen.Height = screenHeight - inputHeight - TopicBarHeight
+	if drawStatusBar {
+		view.contentScreen.Height -= StatusBarHeight
+	}
+
+	// User list hidden or drawn as overlay:
+	// Size content width to fill screen
+	if !view.parent.config.Preferences.HideUserList && !view.parent.config.Preferences.OverlayUserList {
+		view.contentScreen.Width = screenWidth - UserListWidth
+	} else {
+		view.contentScreen.Width = screenWidth
+	}
+
+	// Compact mode: place status bar above content, but hide by default
+	//   Does not move content when it is shown
+	if view.parent.CompactMode() {
+		if drawStatusBar {
+			// Status bar below topic bar
+			view.statusScreen.OffsetY = TopicBarHeight
+			// Content below status bar
+			view.contentScreen.OffsetY = view.statusScreen.YEnd()
+		} else {
+			// Content below topic bar
+			view.contentScreen.OffsetY = TopicBarHeight
+		}
+		// Input bar below content
+		view.inputScreen.OffsetY = view.contentScreen.YEnd()
+
+	// Full mode: place status bar below content
+	} else {
+		// Content below topic bar
+		view.contentScreen.OffsetY = TopicBarHeight
+		// Status bar below content
+		view.statusScreen.OffsetY = view.contentScreen.YEnd()
+		// Input bar below status bar
+		view.inputScreen.OffsetY = view.statusScreen.YEnd()
+	}
+
+	if !view.parent.config.Preferences.HideUserList {
+		view.ulScreen.Height = view.contentScreen.Height
+
+		if view.parent.config.Preferences.OverlayUserList {
+			view.ulScreen.OffsetX = screenWidth - UserListWidth
+		} else {
+			view.ulScreen.OffsetX = view.contentScreen.XEnd()
+		}
+	}
+
+	// Style topic
+	view.topic.
+		SetTextColor(tcell.ColorWhite).
+		SetBackgroundColor(tcell.ColorDarkGreen).
+		SetTextAlign(mauview.AlignLeft)
+
+	// Draw always-visible elements
 	view.topic.Draw(view.topicScreen)
 	view.content.Draw(view.contentScreen)
-	view.status.SetText(view.GetStatus())
-	view.status.Draw(view.statusScreen)
-	view.input.Draw(view.inputScreen)
-	if !view.config.Preferences.HideUserList && view.config.Preferences.DisplayMode != config.DisplayModeModern {
-		view.ulBorder.Draw(view.ulBorderScreen)
-		view.userList.Draw(view.ulScreen)
+	if drawStatusBar {
+		view.status.SetText(view.GetStatus())
+		view.status.Draw(view.statusScreen)
 	}
-	if view.config.Preferences.DisplayMode == config.DisplayModeModern {
-		widget.NewBorder().Draw(mauview.NewProxyScreen(view.topicScreen, 2, 1, view.topicScreen.Width-5, 1))
+	view.input.Draw(view.inputScreen)
+
+	// Only draw user list if visible
+	if !view.parent.config.Preferences.HideUserList {
+		view.userList.Draw(view.ulScreen)
 	}
 }
 
@@ -367,23 +403,7 @@ func (view *RoomView) OnKeyEvent(event mauview.KeyEvent) bool {
 		Mod: event.Modifiers(),
 	}
 
-	if view.selecting {
-		switch view.config.Keybindings.Visual[kb] {
-		case "clear":
-			view.ClearAllContext()
-		case "select_prev":
-			view.SelectPrevious()
-		case "select_next":
-			view.SelectNext()
-		case "confirm":
-			view.OnSelect(msgView.selected)
-		default:
-			return false
-		}
-		return true
-	}
-
-	switch view.config.Keybindings.Room[kb] {
+	switch view.parent.config.Keybindings.Room[kb] {
 	case "clear":
 		view.ClearAllContext()
 		return true
@@ -391,13 +411,34 @@ func (view *RoomView) OnKeyEvent(event mauview.KeyEvent) bool {
 		if msgView.IsAtTop() {
 			go view.parent.LoadHistory(view.Room.ID)
 		}
+		msgView.AddScrollOffset(+1)
+		return true
+	case "scroll_up_page":
+		if msgView.IsAtTop() {
+			go view.parent.LoadHistory(view.Room.ID)
+		}
 		msgView.AddScrollOffset(+msgView.Height() / 2)
 		return true
 	case "scroll_down":
+		msgView.AddScrollOffset(-1)
+		return true
+	case "scroll_down_page":
 		msgView.AddScrollOffset(-msgView.Height() / 2)
 		return true
 	case "send":
 		view.InputSubmit(view.input.GetText())
+		return true
+	case "back":
+		if view.parent.displayState == CompactRoom {
+			view.parent.SetDisplayState(CompactRoomList)
+		} else {
+			view.parent.SetFlexFocused(view.parent.roomListView.GetView())
+		}
+		view.parent.parent.Render()
+		return true
+	case "toggle_user_list":
+		view.parent.config.Preferences.HideUserList = !view.parent.config.Preferences.HideUserList
+		view.parent.parent.Render()
 		return true
 	}
 	return view.input.OnKeyEvent(event)
@@ -880,10 +921,13 @@ func (view *RoomView) MxRoom() *rooms.Room {
 }
 
 func (view *RoomView) Update() {
+
+	// Get topic string
 	topicStr := strings.TrimSpace(strings.ReplaceAll(view.Room.GetTopic(), "\n", " "))
-	if view.config.Preferences.DisplayMode == config.DisplayModeModern {
+	if view.parent.CompactMode() {
 		topicStr = view.Room.GetTitle()
-	} else if view.config.Preferences.HideRoomList {
+
+	} else {
 		if len(topicStr) > 0 {
 			topicStr = fmt.Sprintf("%s - %s", view.Room.GetTitle(), topicStr)
 		} else {

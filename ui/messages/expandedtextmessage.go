@@ -35,8 +35,8 @@ type ExpandedTextMessage struct {
 }
 
 // NewExpandedTextMessage creates a new ExpandedTextMessage object with the provided values and the default state.
-func NewExpandedTextMessage(evt *muksevt.Event, displayname string, text tstring.TString) *UIMessage {
-	return newUIMessage(evt, displayname, &ExpandedTextMessage{
+func NewExpandedTextMessage(evt *muksevt.Event, displayname string, isOwnMessage bool, text tstring.TString) *UIMessage {
+	return newUIMessage(evt, displayname, isOwnMessage, &ExpandedTextMessage{
 		Text: text,
 	})
 }

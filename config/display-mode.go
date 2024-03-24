@@ -21,4 +21,5 @@ type DisplayMode string
 const (
 	DisplayModeIRC    DisplayMode = "irc"
 	DisplayModeModern DisplayMode = "modern"
+	DisplayModeHub    DisplayMode = "hub"
 )

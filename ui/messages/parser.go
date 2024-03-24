@@ -69,25 +69,26 @@ func ParseEvent(matrix ifc.MatrixContainer, mainView ifc.MainView, room *rooms.R
 
 func directParseEvent(matrix ifc.MatrixContainer, room *rooms.Room, evt *muksevt.Event) *UIMessage {
 	displayname := string(evt.Sender)
+	isOwnMessage := matrix.Client().UserID == evt.Sender
 	member := room.GetMember(evt.Sender)
 	if member != nil {
 		displayname = member.Displayname
 	}
 	if evt.Unsigned.RedactedBecause != nil || evt.Type == event.EventRedaction {
-		return NewRedactedMessage(evt, displayname)
+		return NewRedactedMessage(evt, displayname, isOwnMessage)
 	}
 	switch content := evt.Content.Parsed.(type) {
 	case *event.MessageEventContent:
 		if evt.Type == event.EventSticker {
 			content.MsgType = event.MsgImage
 		}
-		return ParseMessage(matrix, room, evt, displayname)
+		return ParseMessage(matrix, room, evt, displayname, isOwnMessage)
 	case *muksevt.BadEncryptedContent:
-		return NewExpandedTextMessage(evt, displayname, tstring.NewStyleTString(content.Reason, tcell.StyleDefault.Italic(true)))
+		return NewExpandedTextMessage(evt, displayname, isOwnMessage, tstring.NewStyleTString(content.Reason, tcell.StyleDefault.Italic(true)))
 	case *muksevt.EncryptionUnsupportedContent:
-		return NewExpandedTextMessage(evt, displayname, tstring.NewStyleTString("gomuks not built with encryption support", tcell.StyleDefault.Italic(true)))
+		return NewExpandedTextMessage(evt, displayname, isOwnMessage, tstring.NewStyleTString("gomuks not built with encryption support", tcell.StyleDefault.Italic(true)))
 	case *event.TopicEventContent, *event.RoomNameEventContent, *event.CanonicalAliasEventContent:
-		return ParseStateEvent(evt, displayname)
+		return ParseStateEvent(evt, displayname, isOwnMessage)
 	case *event.MemberEventContent:
 		return ParseMembershipEvent(room, evt)
 	default:
@@ -137,7 +138,7 @@ NewLoop:
 	return
 }
 
-func ParseStateEvent(evt *muksevt.Event, displayname string) *UIMessage {
+func ParseStateEvent(evt *muksevt.Event, displayname string, isOwnMessage bool) *UIMessage {
 	text := tstring.NewColorTString(displayname, widget.GetHashColor(evt.Sender)).Append(" ")
 	switch content := evt.Content.Parsed.(type) {
 	case *event.TopicEventContent:
@@ -188,10 +189,10 @@ func ParseStateEvent(evt *muksevt.Event, displayname string) *UIMessage {
 			text = text.AppendColor(" for this room", tcell.ColorGreen)
 		}
 	}
-	return NewExpandedTextMessage(evt, displayname, text)
+	return NewExpandedTextMessage(evt, displayname, isOwnMessage, text)
 }
 
-func ParseMessage(matrix ifc.MatrixContainer, room *rooms.Room, evt *muksevt.Event, displayname string) *UIMessage {
+func ParseMessage(matrix ifc.MatrixContainer, room *rooms.Room, evt *muksevt.Event, displayname string, isOwnMessage bool) *UIMessage {
 	content := evt.Content.AsMessage()
 	if len(content.GetReplyTo()) > 0 {
 		content.RemoveReplyFallback()
@@ -218,9 +219,9 @@ func ParseMessage(matrix ifc.MatrixContainer, room *rooms.Room, evt *muksevt.Eve
 			htmlEntity = html.NewTextEntity("Blank message")
 			htmlEntity.AdjustStyle(html.AdjustStyleTextColor(tcell.ColorRed), html.AdjustStyleReasonNormal)
 		}
-		return NewHTMLMessage(evt, displayname, htmlEntity)
+		return NewHTMLMessage(evt, displayname, isOwnMessage, htmlEntity)
 	case event.MsgImage, event.MsgVideo, event.MsgAudio, event.MsgFile:
-		msg := NewFileMessage(matrix, evt, displayname)
+		msg := NewFileMessage(matrix, evt, displayname, isOwnMessage)
 		if !matrix.Preferences().DisableDownloads {
 			renderer := msg.Renderer.(*FileMessage)
 			renderer.DownloadPreview()
@@ -320,5 +321,5 @@ func ParseMembershipEvent(room *rooms.Room, evt *muksevt.Event) *UIMessage {
 		return nil
 	}
 
-	return NewExpandedTextMessage(evt, displayname, text)
+	return NewExpandedTextMessage(evt, displayname, false, text)
 }

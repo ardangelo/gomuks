@@ -44,7 +44,6 @@ import (
 	"maunium.net/go/mautrix/format"
 	"maunium.net/go/mautrix/id"
 
-	"maunium.net/go/gomuks/config"
 	"maunium.net/go/gomuks/debug"
 	"maunium.net/go/gomuks/lib/filepicker"
 )
@@ -909,17 +908,6 @@ func cmdSetState(cmd *Command) {
 }
 
 func cmdEscape(cmd *Command) {
-	if cmd.Config.Preferences.DisplayMode != config.DisplayModeModern {
-		cmd.Reply("/escape can only be used in the modern display mode")
-		return
-	}
-	if cmd.MainView.rosterView.room == nil || !cmd.MainView.rosterView.focused {
-		cmd.Reply("/escape is used to exit from an open room (no room opened)")
-		return
-	}
-	cmd.MainView.rosterView.focused = false
-	cmd.MainView.rosterView.split = nil
-	cmd.MainView.rosterView.room = nil
 	cmd.UI.Render()
 }
 
@@ -1020,8 +1008,6 @@ func cmdToggle(cmd *Command) {
 	for _, thing := range cmd.Args {
 		var val *bool
 		switch thing {
-		case "rooms":
-			val = &cmd.Config.Preferences.HideRoomList
 		case "users":
 			val = &cmd.Config.Preferences.HideUserList
 		case "timestamps":
@@ -1054,16 +1040,6 @@ func cmdToggle(cmd *Command) {
 			default:
 				cmd.Config.Preferences.InlineURLMode = "enable"
 				cmd.Reply("Force-enabled using fancy terminal features to render URLs inside text. Restart gomuks to apply changes.")
-			}
-			continue
-		case "displaymode":
-			switch cmd.Config.Preferences.DisplayMode {
-			case "modern":
-				cmd.Config.Preferences.DisplayMode = config.DisplayModeIRC
-				cmd.Reply("Enabled IRC display mode.")
-			default:
-				cmd.Config.Preferences.DisplayMode = config.DisplayModeModern
-				cmd.Reply("Enabled modern display mode.")
 			}
 			continue
 		case "newline":

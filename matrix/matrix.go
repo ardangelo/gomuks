@@ -156,28 +156,6 @@ func (c *Container) InitClient(isStartup bool) error {
 		}
 	}
 
-	if !SkipVersionCheck && (!isStartup || len(c.client.AccessToken) > 0) {
-		debug.Printf("Checking versions that %s supports", c.client.HomeserverURL)
-		resp, err := c.client.Versions()
-		if err != nil {
-			debug.Print("Error checking supported versions:", err)
-			return fmt.Errorf("failed to check server versions: %w", err)
-		} else if !resp.ContainsGreaterOrEqual(MinSpecVersion) {
-			debug.Print("Server doesn't support modern spec versions")
-			bestVersionStr := "nothing"
-			bestVersion := mautrix.MustParseSpecVersion("r0.0.0")
-			for _, ver := range resp.Versions {
-				if ver.GreaterThan(bestVersion) {
-					bestVersion = ver
-					bestVersionStr = ver.String()
-				}
-			}
-			return fmt.Errorf("%w (it only supports %s, while gomuks requires %s)", ErrServerOutdated, bestVersionStr, MinSpecVersion.String())
-		} else {
-			debug.Print("Server supports modern spec versions")
-		}
-	}
-
 	c.stop = make(chan bool, 1)
 
 	if len(accessToken) > 0 && !c.headless {
@@ -440,6 +418,7 @@ func (c *Container) InitSyncer() {
 	c.syncer.OnEventType(event.StateTopic, c.HandleMessage)
 	c.syncer.OnEventType(event.StateRoomName, c.HandleMessage)
 	c.syncer.OnEventType(event.StateMember, c.HandleMembership)
+	c.syncer.OnEventType(event.StateBridge, c.HandleBridge)
 	c.syncer.OnEventType(event.EphemeralEventReceipt, c.HandleReadReceipt)
 	c.syncer.OnEventType(event.EphemeralEventTyping, c.HandleTyping)
 	c.syncer.OnEventType(event.AccountDataDirectChats, c.HandleDirectChatInfo)
@@ -482,6 +461,7 @@ func (c *Container) ProcessSyncResponse(res *mautrix.RespSync, since string) err
 
 // OnLogin initializes the syncer and updates the room list.
 func (c *Container) OnLogin() {
+
 	c.cryptoOnLogin()
 	c.ui.OnLogin()
 
@@ -511,6 +491,27 @@ func (c *Container) Start() {
 	defer debug.Recover()
 
 	c.OnLogin()
+
+	if !SkipVersionCheck && len(c.client.AccessToken) > 0 {
+		debug.Printf("Checking versions that %s supports", c.client.HomeserverURL)
+		resp, err := c.client.Versions()
+		if err != nil {
+			debug.Print("Error checking supported versions:", err)
+		} else if !resp.ContainsGreaterOrEqual(MinSpecVersion) {
+			debug.Print("Server doesn't support modern spec versions")
+			bestVersionStr := "nothing"
+			bestVersion := mautrix.MustParseSpecVersion("r0.0.0")
+			for _, ver := range resp.Versions {
+				if ver.GreaterThan(bestVersion) {
+					bestVersion = ver
+					bestVersionStr = ver.String()
+				}
+			}
+			debug.Print("%w (it only supports %s, while gomuks requires %s)", ErrServerOutdated, bestVersionStr, MinSpecVersion.String())
+		} else {
+			debug.Print("Server supports modern spec versions")
+		}
+	}
 
 	if c.client == nil {
 		return
@@ -762,13 +763,39 @@ func (c *Container) HandleMessage(source mautrix.EventSource, mxEvent *event.Eve
 	}
 }
 
+var (
+	tagDirect  = rooms.RoomTag{"net.maunium.gomuks.fake.direct", "0.5"}
+	tagInvite  = rooms.RoomTag{"net.maunium.gomuks.fake.invite", "0.5"}
+	tagLeave   = rooms.RoomTag{"net.maunium.gomuks.fake.leave", "0.5"}
+)
+
 // HandleMembership is the event handler for the m.room.member state event.
 func (c *Container) HandleMembership(source mautrix.EventSource, evt *event.Event) {
+
+	// Get membership change flags
 	isLeave := source&mautrix.EventSourceLeave != 0
+	isInvite := source&mautrix.EventSourceInvite != 0
 	isTimeline := source&mautrix.EventSourceTimeline != 0
-	if isLeave {
-		c.GetOrCreateRoom(evt.RoomID).HasLeft = true
+
+	// Add invite tag to room
+	if isInvite {
+		room := c.GetOrCreateRoom(evt.RoomID);
+		room.RawTags = append(room.RawTags, tagInvite)
+		if c.config.AuthCache.InitialSyncDone {
+			c.ui.MainView().UpdateTags(room)
+		}
 	}
+
+	// Add leave tag to room
+	if isLeave {
+		room := c.GetOrCreateRoom(evt.RoomID);
+		room.HasLeft = true
+		room.RawTags = append(room.RawTags, tagLeave)
+		if c.config.AuthCache.InitialSyncDone {
+			c.ui.MainView().UpdateTags(room)
+		}
+	}
+
 	isNonTimelineLeave := isLeave && !isTimeline
 	if !c.config.AuthCache.InitialSyncDone && isNonTimelineLeave {
 		return
@@ -780,6 +807,22 @@ func (c *Container) HandleMembership(source mautrix.EventSource, evt *event.Even
 	}
 
 	c.HandleMessage(source, evt)
+}
+
+// Add tags based on the bridge state event
+func (c *Container) HandleBridge(_ mautrix.EventSource, evt *event.Event) {
+	debug.Printf("HandleBridge callback")
+	_, server, err := evt.Sender.Parse()
+	if err == nil || server != "beeper.local" {
+		return
+	}
+
+	// Make bridge tag
+	bridge := evt.Content.AsBridge()
+	if c.config.AuthCache.InitialSyncDone {
+		room := c.GetRoom(evt.RoomID)
+		room.RawTags = append(room.RawTags, rooms.RoomTag{bridge.Protocol.DisplayName, "0.5"})
+	}
 }
 
 func (c *Container) processOwnMembershipChange(evt *event.Event) {
@@ -874,6 +917,7 @@ func (c *Container) HandleDirectChatInfo(_ mautrix.EventSource, evt *event.Event
 		if isDirect != room.IsDirect {
 			room.IsDirect = isDirect
 			room.OtherUser = userID
+			room.RawTags = append(room.RawTags, tagDirect)
 			if c.config.AuthCache.InitialSyncDone {
 				c.ui.MainView().UpdateTags(room)
 			}

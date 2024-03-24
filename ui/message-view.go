@@ -159,8 +159,7 @@ func (view *MessageView) AddMessage(ifcMessage ifc.Message, direction MessageDir
 
 	width := view.width()
 	bare := view.config.Preferences.BareMessageView
-	modern := view.config.Preferences.DisplayMode == config.DisplayModeModern
-	if modern {
+	if view.parent.parent.CompactMode() {
 		width -= 5
 	} else if !bare {
 		width -= view.widestSender() + SenderMessageGap
@@ -180,7 +179,7 @@ func (view *MessageView) AddMessage(ifcMessage ifc.Message, direction MessageDir
 
 	if direction == AppendMessage {
 		if view.ScrollOffset > 0 {
-			view.ScrollOffset += message.Height(view.showModernHeader(message))
+			view.ScrollOffset += message.Height(view.drawCompactHeader(message))
 		}
 		view.messagesLock.Lock()
 		if len(view.messages) > 0 && !view.messages[len(view.messages)-1].SameDate(message) {
@@ -254,8 +253,8 @@ func (view *MessageView) setMessageID(message *messages.UIMessage) {
 	view.messageIDLock.Unlock()
 }
 
-func (view *MessageView) showModernHeader(message *messages.UIMessage) bool {
-	if view.config.Preferences.DisplayMode != config.DisplayModeModern {
+func (view *MessageView) drawCompactHeader(message *messages.UIMessage) bool {
+	if !view.parent.parent.CompactMode() {
 		return false
 	}
 	if message.IsService {
@@ -272,7 +271,7 @@ func (view *MessageView) appendBuffer(message *messages.UIMessage) {
 }
 
 func (view *MessageView) appendBufferUnlocked(message *messages.UIMessage) {
-	for i := 0; i < message.Height(view.showModernHeader(message)); i++ {
+	for i := 0; i < message.Height(view.drawCompactHeader(message)); i++ {
 		view.msgBuffer = append(view.msgBuffer, message)
 	}
 	view.prevMsgCount++
@@ -305,13 +304,13 @@ func (view *MessageView) replaceBuffer(original *messages.UIMessage, new *messag
 		end++
 	}
 
-	if new.Height(view.showModernHeader(new)) == 0 {
+	if new.Height(view.drawCompactHeader(new)) == 0 {
 		new.CalculateBuffer(view.prevPrefs, view.prevWidth())
 	}
 
 	view.msgBufferLock.Lock()
-	if new.Height(view.showModernHeader(new)) != end-start {
-		height := new.Height(view.showModernHeader(new))
+	if new.Height(view.drawCompactHeader(new)) != end-start {
+		height := new.Height(view.drawCompactHeader(new))
 
 		newBuffer := make([]*messages.UIMessage, height+len(view.msgBuffer)-end)
 		for i := 0; i < height; i++ {
@@ -339,7 +338,7 @@ func (view *MessageView) recalculateBuffers() {
 	view.msgBufferLock.Lock()
 	if recalculateMessageBuffers || len(view.messages) != view.prevMsgCount {
 		width := view.width()
-		if prefs.DisplayMode == config.DisplayModeModern {
+		if view.parent.parent.CompactMode() {
 			width -= 5
 		} else if !prefs.BareMessageView {
 			width -= view.widestSender() + SenderMessageGap
@@ -457,7 +456,7 @@ func (view *MessageView) OnMouseEvent(event mauview.MouseEvent) bool {
 		}
 		view.msgBufferLock.RUnlock()
 
-		if view.config.Preferences.DisplayMode == config.DisplayModeModern {
+		if view.parent.parent.CompactMode() {
 			if prevMessage == message {
 				return view.handleMessageClick(message, event.Modifiers())
 			} else {
@@ -625,6 +624,8 @@ func (view *MessageView) CapturePlaintext(height int) string {
 }
 
 func (view *MessageView) Draw(screen mauview.Screen) {
+
+	// Resize view to fill the screen
 	view.setSize(screen.Size())
 	view.recalculateBuffers()
 
@@ -634,28 +635,21 @@ func (view *MessageView) Draw(screen mauview.Screen) {
 		return
 	}
 
+	noLeftPad := view.config.Preferences.BareMessageView || view.parent.parent.CompactMode()
+
+	// Calculate offsets for the usernames column
 	usernameX := 0
 	if !view.config.Preferences.HideTimestamp {
 		usernameX += view.TimestampWidth + TimestampSenderGap
 	}
 	messageX := usernameX + view.widestSender() + SenderMessageGap
-
-	noLeftPad := view.config.Preferences.BareMessageView || view.config.Preferences.DisplayMode == config.DisplayModeModern
-	if noLeftPad {
-		if view.config.Preferences.DisplayMode == config.DisplayModeModern {
-			messageX = 2
-		} else {
-			messageX = 0
-		}
-	}
-
 	indexOffset := view.getIndexOffset(screen, height, messageX)
-
 	viewStart := 0
 	if indexOffset < 0 {
 		viewStart = -indexOffset
 	}
 
+	// Left pad: pad to widest sender
 	if !noLeftPad {
 		separatorX := usernameX + view.widestSender() + SenderSeparatorGap
 		scrollBarHeight, scrollBarPos := view.calculateScrollBar(height)
@@ -671,13 +665,16 @@ func (view *MessageView) Draw(screen mauview.Screen) {
 		}
 	}
 
+	// Draw messages
 	var prevMsg *messages.UIMessage
 	view.msgBufferLock.RLock()
 	for line := viewStart; line < height && indexOffset+line < len(view.msgBuffer); {
 		index := indexOffset + line
 
 		msg := view.msgBuffer[index]
-		header := view.showModernHeader(msg)
+		// Compact mode: right-align messages from own user
+		header := view.drawCompactHeader(msg)
+		rightAlign := msg.IsOwnMessage && header
 
 		if msg == prevMsg {
 			debug.Print("Unexpected re-encounter of", msg, msg.Height(header), "at", line, index)
@@ -685,7 +682,7 @@ func (view *MessageView) Draw(screen mauview.Screen) {
 			continue
 		}
 
-		if view.config.Preferences.DisplayMode != config.DisplayModeModern {
+		if !header {
 			if len(msg.FormatTime()) > 0 && !view.config.Preferences.HideTimestamp {
 				widget.WriteLineSimpleColor(screen, msg.FormatTime(), 0, line, msg.TimestampColor())
 			}
@@ -705,28 +702,100 @@ func (view *MessageView) Draw(screen mauview.Screen) {
 		for i := index - 1; i >= 0 && view.msgBuffer[i] == msg; i-- {
 			line--
 		}
-		offset := 0
+		offsetY := 0
 		if header {
-			offset = 1
+			if msg.IsOwnMessage {
+				messageX = 2
+			} else {
+				messageX = 0
+			}
+			offsetY = 1
 
 			boldStyle := tcell.StyleDefault.Bold(true)
 			username := msg.Sender()
-			widget.WriteLine(screen, mauview.AlignLeft, username,
-				messageX, line, len(username), boldStyle.Foreground(msg.SenderColor()))
-			widget.WriteLine(screen, mauview.AlignLeft, " "+string(tcell.RuneBullet)+" ",
-				messageX+len(username), line, 3, boldStyle)
-			widget.WriteLine(screen, mauview.AlignLeft, msg.FormatTime(),
-				messageX+len(username)+3, line, view.width()-len(username)-3,
-				boldStyle.Foreground(msg.TimestampColor()),
-			)
+			alignment := mauview.AlignLeft
+			usernameStartLeft := " »"
+			usernameStartRight := " «"
+			usernameTimeSep := " "+string(tcell.RuneBullet)
+			timeStr := msg.FormatTime()
+			editedStr := ""
 			if msg.Edited {
-				widget.WriteLine(screen, mauview.AlignLeft, " "+string(tcell.RuneBullet)+" ",
-					messageX+len(username)+3+len(msg.FormatTime()), line, 3, boldStyle)
-				widget.WriteLine(screen, mauview.AlignLeft, "Edited",
-					messageX+len(username)+len(msg.FormatTime())+6, line, 6, boldStyle.Foreground(tcell.ColorDarkRed))
+				editedStr = " (Edited)"
+			}
+			maxUsernameLen := view.width() - (len(usernameStartLeft) +
+				len(usernameTimeSep) + len(timeStr) + len(editedStr))
+
+			if !rightAlign {
+				offsetX := messageX
+
+				// Draw username starter
+				widget.WriteLine(screen, alignment, usernameStartLeft,
+					offsetX, line, len(usernameStartLeft),
+					boldStyle)
+				offsetX += len(usernameStartLeft)
+				// Draw username
+				widget.WriteLine(screen, alignment, username,
+					offsetX, line, maxUsernameLen,
+					boldStyle.Foreground(msg.SenderColor()))
+				if (len(username) < maxUsernameLen) {
+					offsetX += len(username)
+				} else {
+					offsetX += maxUsernameLen
+				}
+				// Draw edited marker
+				if (len(editedStr) > 0) {
+					widget.WriteLine(screen, alignment, editedStr,
+						offsetX, line, len(editedStr),
+						boldStyle.Foreground(tcell.ColorDarkRed))
+					offsetX += len(editedStr)
+				}
+				// Draw separator
+				widget.WriteLine(screen, alignment, usernameTimeSep,
+					offsetX, line, len(usernameTimeSep),
+					boldStyle)
+				offsetX += len(usernameTimeSep)
+				// Draw time
+				widget.WriteLine(screen, alignment, timeStr,
+					offsetX, line, len(timeStr),
+					boldStyle.Foreground(msg.TimestampColor()))
+				offsetX += len(timeStr)
+			} else {
+				offsetX := view.width()
+
+				// Draw username starter
+				offsetX -= len(usernameStartRight)
+				widget.WriteLine(screen, alignment, usernameStartRight,
+					offsetX, line, len(usernameStartRight),
+					boldStyle)
+				// Draw time
+				offsetX -= len(timeStr)
+				widget.WriteLine(screen, alignment, timeStr,
+					offsetX, line, len(timeStr),
+					boldStyle.Foreground(msg.TimestampColor()))
+				// Draw separator
+				offsetX -= len(usernameTimeSep)
+				widget.WriteLine(screen, alignment, usernameTimeSep,
+					offsetX, line, len(usernameTimeSep),
+					boldStyle)
+				// Draw edited marker
+				if (len(editedStr) > 0) {
+					offsetX -= len(editedStr)
+					widget.WriteLine(screen, alignment, editedStr,
+						offsetX, line, len(editedStr),
+						boldStyle.Foreground(tcell.ColorDarkRed))
+				}
+				// Draw username
+				if (len(username) < maxUsernameLen) {
+					offsetX -= len(username)
+				} else {
+					offsetX -= maxUsernameLen
+				}
+				widget.WriteLine(screen, alignment, username,
+					offsetX, line, maxUsernameLen,
+					boldStyle.Foreground(msg.SenderColor()))
 			}
 		}
-		msg.Draw(mauview.NewProxyScreen(screen, messageX, line+offset, view.width()-messageX, msg.Height(header)), header)
+		msg.Draw(mauview.NewProxyScreen(screen, messageX, line+offsetY, view.width()-messageX, msg.Height(header)), header)
 		line += msg.Height(header)
 
 		prevMsg = msg
