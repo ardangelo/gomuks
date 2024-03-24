@@ -220,50 +220,50 @@ func (hrlv *HubRoomListView) Last() (string, *rooms.Room) {
 	return "", nil
 }
 
+// Get HubRoom at index, clamping to valid indices
+func (hrlv *HubRoomListView) seekRoom(index int) *HubRoom {
+
+	if len(hrlv.hubRooms) == 0 {
+		return nil
+	}
+
+	if index < 0 {
+		index = 0
+	} else if index >= len(hrlv.hubRooms) {
+		index = len(hrlv.hubRooms) - 1
+	}
+
+	return hrlv.hubRooms[index]
+}
+
 func (hrlv *HubRoomListView) Previous() (string, *rooms.Room) {
 	hrlv.Lock()
 	defer hrlv.Unlock()
 
-	if hrlv.selected == nil {
-		if len(hrlv.hubRooms) > 0 {
-			hrlv.selected = hrlv.hubRooms[0]
-			return "", hrlv.selected.mxRoom
-		} else {
-			return "", nil
-		}
+	index := 0
+	if hrlv.selected != nil {
+		index = hrlv.indexOfRoom(hrlv.selected.mxRoom)
 	}
 
-	index := hrlv.indexOfRoom(hrlv.selected.mxRoom)
-	if index < 0 || index >= len(hrlv.hubRooms) {
-		return "", nil
-	} else if index == 0 {
+	if hrlv.selected = hrlv.seekRoom(index - 1); hrlv.selected != nil {
 		return "", hrlv.selected.mxRoom
-	} else {
-		return "", hrlv.hubRooms[index - 1].mxRoom
 	}
+	return "", nil
 }
 
 func (hrlv *HubRoomListView) Next() (string, *rooms.Room) {
 	hrlv.Lock()
 	defer hrlv.Unlock()
 
-	if hrlv.selected == nil {
-		if len(hrlv.hubRooms) > 0 {
-			hrlv.selected = hrlv.hubRooms[0]
-			return "", hrlv.selected.mxRoom
-		} else {
-			return "", nil
-		}
+	index := 0
+	if hrlv.selected != nil {
+		index = hrlv.indexOfRoom(hrlv.selected.mxRoom)
 	}
 
-	index := hrlv.indexOfRoom(hrlv.selected.mxRoom)
-	if index < 0 || index >= len(hrlv.hubRooms) {
-		return "", nil
-	} else if index == len(hrlv.hubRooms) - 1 {
+	if hrlv.selected = hrlv.seekRoom(index + 1); hrlv.selected != nil {
 		return "", hrlv.selected.mxRoom
-	} else {
-		return "", hrlv.hubRooms[index + 1].mxRoom
 	}
+	return "", nil
 }
 
 func (hrlv *HubRoomListView) NextWithActivity() (string, *rooms.Room) {
@@ -292,10 +292,19 @@ func (hrlv *HubRoomListView) OnKeyEvent(event mauview.KeyEvent) bool {
 		debug.Print("Switching to previous room")
 		hrlv.parent.SwitchRoom(hrlv.Previous())
 	case "search_rooms":
-		hrlv.parent.ShowModal(NewFuzzySearchModal(hrlv.parent, 42, 12))
+		hrlv.parent.ShowModal(NewFuzzySearchModal(hrlv.parent, 30, 12))
 	case "scroll_up":
-		break
+		if hrlv.selected != nil {
+			index := hrlv.indexOfRoom(hrlv.selected.mxRoom)
+			renderableIndices := (hrlv.height - 2) / 2 - 1
+			hrlv.parent.SwitchRoom("", hrlv.seekRoom(index - renderableIndices).mxRoom)
+		}
 	case "scroll_down":
+		if hrlv.selected != nil {
+			index := hrlv.indexOfRoom(hrlv.selected.mxRoom)
+			renderableIndices := (hrlv.height - 2) / 2 - 1
+			hrlv.parent.SwitchRoom("", hrlv.seekRoom(index + renderableIndices).mxRoom)
+		}
 		break
 	case "select_room":
 		if hrlv.parent.displayState == CompactRoomList {
@@ -354,7 +363,7 @@ func (hrlv *HubRoomListView) Draw(screen mauview.Screen) {
 	tmX := hrlv.width - len(tm)
 
 	widget.WriteLine(screen, mauview.AlignLeft, "GOMUKS", 0, 0, tmX, titleStyle)
-	widget.WriteLine(screen, mauview.AlignRight, now.Format("Mon, Jan 02"), 0, 0, hrlv.width, mainStyle)
+	widget.WriteLine(screen, mauview.AlignRight, now.Format("Mon, Jan 02 15:04"), 0, 0, hrlv.width, mainStyle)
 	widget.NewBorder().Draw(mauview.NewProxyScreen(screen, 0, 1, hrlv.width, 1))
 
 	y := 2
@@ -402,7 +411,6 @@ func (hrlv *HubRoomListView) Draw(screen mauview.Screen) {
 		startingX := 0
 
 		if isSelected {
-			lastMessage = "  " + lastMessage
 			msgStyle = msgStyle.Italic(true)
 			if hrlv.isFocused {
 				msgStyle = msgStyle.Background(tcell.ColorWhite)
@@ -415,7 +423,8 @@ func (hrlv *HubRoomListView) Draw(screen mauview.Screen) {
 		tmX := hrlv.width - len(tm)
 		widget.WriteLinePadded(screen, mauview.AlignLeft, hubRoom.mxRoom.GetTitle(), startingX, y, tmX, style)
 		widget.WriteLine(screen, mauview.AlignLeft, tm, tmX, y, startingX+len(tm), style)
-		widget.WriteLinePadded(screen, mauview.AlignLeft, lastMessage, 0, y+1, hrlv.width, msgStyle)
+		widget.WriteLinePadded(screen, mauview.AlignLeft, "  " + lastMessage, 0, y+1,
+			hrlv.width, msgStyle)
 
 		y += renderHeight
 		if y >= hrlv.height {

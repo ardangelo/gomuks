@@ -15,6 +15,7 @@ room_list:
   'Escape': back
   'Tab': next_window
   'Enter': select_room
+  'Ctrl+F': search_rooms
 
 room:
   'Up': scroll_up

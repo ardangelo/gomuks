@@ -66,7 +66,6 @@ type MainView struct {
 	roomsLock    sync.RWMutex
 
 	// Focus control
-	focusedBelowModal mauview.Focusable
 	lastFocusTime time.Time
 	
 	// Command proessor
@@ -131,17 +130,11 @@ func (view *MainView) FlashLED(r, g, b uint16) {
 func (view *MainView) ShowModal(modal mauview.Component) {
 	view.modal = modal
 	view.flex.Blur()
-	var ok bool
-	view.focusedBelowModal, ok = modal.(mauview.Focusable)
-	if ok {
-		view.focusedBelowModal.Focus()
-	}
 }
 
 func (view *MainView) HideModal() {
 	view.modal = nil
-	view.focusedBelowModal.Focus()
-	view.focusedBelowModal = nil
+	view.SetFlexFocused(view.roomView)
 }
 
 func (view *MainView) Draw(screen mauview.Screen) {
