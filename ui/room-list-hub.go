@@ -18,6 +18,7 @@ package ui
 
 import (
 	"time"
+	"fmt"
 
 	sync "github.com/sasha-s/go-deadlock"
 
@@ -359,18 +360,16 @@ func (hrlv *HubRoomListView) Draw(screen mauview.Screen) {
 		return
 	}
 
-	titleStyle := tcell.StyleDefault.Foreground(tcell.ColorDefault).Bold(true)
-	mainStyle := titleStyle.Bold(false)
-
 	now := time.Now()
 	tm := now.Format("15:04")
-	tmX := hrlv.width - len(tm)
 
-	widget.WriteLine(screen, mauview.AlignLeft, "GOMUKS", 0, 0, tmX, titleStyle)
-	widget.WriteLine(screen, mauview.AlignRight, now.Format("Mon, Jan 02 15:04"), 0, 0, hrlv.width, mainStyle)
-	widget.NewBorder().Draw(mauview.NewProxyScreen(screen, 0, 1, hrlv.width, 1))
+	headerStyle := tcell.StyleDefault.
+		Foreground(tcell.ColorWhite).
+		Background(tcell.ColorDarkGreen)
+	headerText := fmt.Sprintf("GOMUKS%*s", hrlv.width - 6, tm)
+	widget.WriteLine(screen, mauview.AlignLeft, headerText, 0, 0, hrlv.width, headerStyle)
 
-	y := 2
+	y := 1
 	if len(hrlv.hubRooms) == 0 {
 		return
 	}

@@ -133,7 +133,6 @@ func NewRoomView(parent *MainView, room *rooms.Room) *RoomView {
 	}
 
 	// Initialize topic
-	// TODO: update when displaymode toggled
 	view.topic.
 		SetTextColor(tcell.ColorWhite).
 		SetBackgroundColor(tcell.ColorDarkGreen)
