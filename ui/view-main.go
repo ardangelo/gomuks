@@ -134,7 +134,8 @@ func (view *MainView) ShowModal(modal mauview.Component) {
 
 func (view *MainView) HideModal() {
 	view.modal = nil
-	view.SetFlexFocused(view.roomView)
+	view.SetDisplayState(view.displayState)
+	view.flex.Focus()
 }
 
 func (view *MainView) Draw(screen mauview.Screen) {
@@ -263,6 +264,22 @@ func (view *MainView) SetDisplayState(displayState DisplayState) {
 			AddFixedComponent(widget.NewBorder(), 1).
 			AddProportionalComponent(view.roomView, 1)
 		view.flex.SetFocused(view.roomView)
+	}
+}
+
+func (view *MainView) FocusRoomView() {
+	if view.displayState == CompactRoomList {
+		view.SetDisplayState(CompactRoom)
+	} else {
+		view.SetFlexFocused(view.roomView)
+	}
+}
+
+func (view *MainView) FocusRoomListView() {
+	if view.displayState == CompactRoom {
+		view.SetDisplayState(CompactRoomList)
+	} else {
+		view.SetFlexFocused(view.roomListView.GetView())
 	}
 }
 

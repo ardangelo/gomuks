@@ -159,6 +159,7 @@ func (fs *FuzzySearchModal) OnKeyEvent(event mauview.KeyEvent) bool {
 		fs.parent.HideModal()
 		fs.results.Clear()
 		fs.search.SetText("")
+		fs.parent.FocusRoomView()
 		return true
 	}
 	return fs.search.OnKeyEvent(event)

@@ -428,12 +428,7 @@ func (view *RoomView) OnKeyEvent(event mauview.KeyEvent) bool {
 		view.InputSubmit(view.input.GetText())
 		return true
 	case "back":
-		if view.parent.displayState == CompactRoom {
-			view.parent.SetDisplayState(CompactRoomList)
-		} else {
-			view.parent.SetFlexFocused(view.parent.roomListView.GetView())
-		}
-		view.parent.parent.Render()
+		view.parent.FocusRoomListView()
 		return true
 	case "toggle_user_list":
 		view.parent.config.Preferences.HideUserList = !view.parent.config.Preferences.HideUserList
