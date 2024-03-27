@@ -466,7 +466,9 @@ func (list *TagRoomListView) OnKeyEvent(event mauview.KeyEvent) bool {
 	case "prev_room":
 		list.parent.SwitchRoom(list.Previous())
 	case "search_rooms":
-		list.parent.ShowModal(NewFuzzySearchModal(list.parent, 42, 12))
+		list.parent.ShowModal(NewFuzzySearchModal(list.parent, 30, 12))
+	case "settings":
+		list.parent.ShowModal(NewSettingsModal(list.parent, 40, 20))
 	case "scroll_up":
 		msgView := list.parent.currentRoom.MessageView()
 		msgView.AddScrollOffset(msgView.TotalHeight())

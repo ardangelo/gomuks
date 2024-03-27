@@ -28,7 +28,7 @@ type SyncingModal struct {
 	progress *mauview.ProgressBar
 }
 
-func NewSyncingModal(parent *MainView) (mauview.Component, *SyncingModal) {
+func NewSyncingModal(parent *MainView) (mauview.FocusableComponent, *SyncingModal) {
 	sm := &SyncingModal{
 		parent:   parent,
 		progress: mauview.NewProgressBar(),
@@ -68,4 +68,12 @@ func (sm *SyncingModal) Step() {
 
 func (sm *SyncingModal) Close() {
 	sm.parent.HideModal()
+}
+
+func (sm *SyncingModal) Focus() {
+	return
+}
+
+func (sm *SyncingModal) Blur() {
+	return
 }

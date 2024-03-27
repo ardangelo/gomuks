@@ -51,7 +51,7 @@ const (
 type MainView struct {
 
 	// Views
-	modal mauview.Component
+	modal mauview.FocusableComponent
 	flex *mauview.Flex
 	screenWidth int
 	displayState DisplayState
@@ -127,9 +127,14 @@ func (view *MainView) FlashLED(r, g, b uint16) {
 	view.led.FlashUntilKey(r, g, b)
 }
 
-func (view *MainView) ShowModal(modal mauview.Component) {
+func (view *MainView) StartRewake() {
+	return
+}
+
+func (view *MainView) ShowModal(modal mauview.FocusableComponent) {
 	view.modal = modal
 	view.flex.Blur()
+	view.modal.Focus()
 }
 
 func (view *MainView) HideModal() {

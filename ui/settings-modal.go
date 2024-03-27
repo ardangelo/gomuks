@@ -17,6 +17,8 @@
 package ui
 
 import (
+	"strconv"
+
 	"go.mau.fi/mauview"
 
 	"maunium.net/go/gomuks/config"
@@ -28,9 +30,27 @@ type SettingsModal struct {
 	container *mauview.Box
 	form *mauview.Form
 
-	settingButton *mauview.Button
+	roomListViewLabel *mauview.TextView
+	roomListViewTagsButton *mauview.Button
+	roomListViewHubButton *mauview.Button
+
+	notifyLabel *mauview.TextView
+	notifyOnButton *mauview.Button
+	notifyOffButton *mauview.Button
+
+	rewakeLabel *mauview.TextView
+	rewakeEntry *mauview.InputField
+	rewakeButton *mauview.Button
 
 	parent *MainView
+}
+
+func formatCheckbox(format string, setting bool) string {
+	if setting {
+		return "(X) " + format
+	} else {
+		return "( ) " + format
+	}
 }
 
 func NewSettingsModal(mainView *MainView, width int, height int) *SettingsModal {
@@ -39,12 +59,90 @@ func NewSettingsModal(mainView *MainView, width int, height int) *SettingsModal 
 		parent: mainView,
 	}
 
-	sm.settingButton = mauview.NewButton("Setting on").
-		SetOnClick(func() { sm.settingButton.SetText("Setting off") })
+	sm.roomListViewLabel = mauview.NewTextView().SetText("Room list (restart req'd)")
+	roomListViewTagsFormat := "Group rooms by tag"
+	roomListViewHubFormat := "Sort by updated"
+	sm.roomListViewTagsButton = mauview.NewButton(
+		formatCheckbox(roomListViewTagsFormat, mainView.config.Preferences.TagGroupRooms)).
+		SetOnClick(func() {
+			sm.parent.config.Preferences.TagGroupRooms = true
+			sm.roomListViewTagsButton.SetText(
+				formatCheckbox(roomListViewTagsFormat,
+					sm.parent.config.Preferences.TagGroupRooms))
+			sm.roomListViewHubButton.SetText(
+				formatCheckbox(roomListViewHubFormat,
+					!sm.parent.config.Preferences.TagGroupRooms))
+			sm.parent.gmx.Stop(true)
+		})
+	sm.roomListViewHubButton = mauview.NewButton(
+		formatCheckbox(roomListViewHubFormat, !sm.parent.config.Preferences.TagGroupRooms)).
+		SetOnClick(func() {
+			sm.parent.config.Preferences.TagGroupRooms = false
+			sm.roomListViewTagsButton.SetText(
+				formatCheckbox(roomListViewTagsFormat,
+					sm.parent.config.Preferences.TagGroupRooms))
+			sm.roomListViewHubButton.SetText(
+				formatCheckbox(roomListViewHubFormat,
+					!sm.parent.config.Preferences.TagGroupRooms))
+			sm.parent.gmx.Stop(true)
+		})
 
-	sm.form.SetColumns([]int{1, 5, 1, 30, 1}).
-		SetRows([]int{1, 1, 1, 1, 1, 1, 1, 1, 1})
-	sm.form.AddFormItem(sm.settingButton, 3, 1, 1, 1)
+	sm.notifyLabel = mauview.NewTextView().SetText("Notify on new messages")
+	notifyOnFormat := "Flash LED until key pressed"
+	notifyOffFormat := "Notification LED disabled"
+	sm.notifyOnButton = mauview.NewButton(
+		formatCheckbox(notifyOnFormat, sm.parent.config.NotifySound)).
+		SetOnClick(func() {
+			mainView.config.NotifySound = true
+			sm.notifyOnButton.SetText(
+				formatCheckbox(notifyOnFormat,
+					sm.parent.config.NotifySound))
+			sm.notifyOffButton.SetText(
+				formatCheckbox(notifyOffFormat,
+					!sm.parent.config.NotifySound))
+		})
+	sm.notifyOffButton = mauview.NewButton(
+		formatCheckbox(notifyOffFormat, !sm.parent.config.NotifySound)).
+		SetOnClick(func() {
+			sm.parent.config.NotifySound = false
+			sm.notifyOnButton.SetText(
+				formatCheckbox(notifyOnFormat,
+					sm.parent.config.NotifySound))
+			sm.notifyOffButton.SetText(
+				formatCheckbox(notifyOffFormat,
+					!sm.parent.config.NotifySound))
+		})
+
+	sm.rewakeLabel = mauview.NewTextView().SetText("Rewake poll interval (minutes)")
+	sm.rewakeEntry = mauview.NewInputField().
+		SetTextAndMoveCursor(strconv.Itoa(
+			sm.parent.config.Preferences.RewakeIntervalMins))
+	sm.rewakeButton = mauview.NewButton("Apply").
+		SetOnClick(func() {
+			mins, err := strconv.Atoi(sm.rewakeEntry.GetText())
+			if err != nil {
+				sm.rewakeButton.SetText("Invalid")
+			} else {
+				sm.parent.config.Preferences.RewakeIntervalMins = mins
+				sm.rewakeButton.SetText("Saved")
+			}
+		})
+
+	sm.form.SetColumns([]int{1, width - 14, 1, 10, 1}).
+		SetRows([]int{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1})
+
+	sm.form.AddFormItem(sm.roomListViewLabel, 1, 1, 3, 1)
+	sm.form.AddFormItem(sm.roomListViewTagsButton, 1, 2, 3, 1)
+	sm.form.AddFormItem(sm.roomListViewHubButton, 1, 3, 3, 1)
+
+	sm.form.AddFormItem(sm.notifyLabel, 1, 5, 3, 1)
+	sm.form.AddFormItem(sm.notifyOnButton, 1, 6, 3, 1)
+	sm.form.AddFormItem(sm.notifyOffButton, 1, 7, 3, 1)
+
+	sm.form.AddFormItem(sm.rewakeLabel, 1, 9, 3, 1)
+	sm.form.AddFormItem(sm.rewakeEntry, 1, 10, 1, 1)
+	sm.form.AddFormItem(sm.rewakeButton, 3, 10, 1, 1)
+
 	sm.form.FocusNextItem()
 
 	sm.container = mauview.NewBox(sm.form).

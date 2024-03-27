@@ -141,3 +141,11 @@ func (pwm *PasswordModal) Wait() (string, bool) {
 		return "", false
 	}
 }
+
+func (pwm *PasswordModal) Focus() {
+	return
+}
+
+func (pwm *PasswordModal) Blur() {
+	return
+}

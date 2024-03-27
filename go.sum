@@ -1,7 +1,7 @@
 github.com/alecthomas/chroma v0.10.0 h1:7XDcGkCQopCNKjZHfYrNLraA+M7e0fMiJ/Mfikbfjek=
 github.com/alecthomas/chroma v0.10.0/go.mod h1:jtJATyUxlIORhUOFNA9NZDWGAQ8wpxQQqNSB4rjA/1s=
-github.com/ardangelo/mauview v0.0.0-20240323154200-ef51f38ab64f h1:mZuya/Ohaeb6jwWJHgF3C3Rg7OkqYR2u394ePhVbxfs=
-github.com/ardangelo/mauview v0.0.0-20240323154200-ef51f38ab64f/go.mod h1:aTb1VjsjFmZ5YsdMQTIHrma9Ki2O0WwkS2Er7bIgoUs=
+github.com/ardangelo/mauview v0.0.0-20240327004921-c0c8d1f80c8b h1:lUFlA7cT+Cider/ShEpRNHjmzg3LN6nT3tLS1q5Y1BY=
+github.com/ardangelo/mauview v0.0.0-20240327004921-c0c8d1f80c8b/go.mod h1:aTb1VjsjFmZ5YsdMQTIHrma9Ki2O0WwkS2Er7bIgoUs=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

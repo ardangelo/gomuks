@@ -65,6 +65,7 @@ type UserPreferences struct {
 	InlineURLMode string `yaml:"inline_url_mode"`
 
 	CompactWidth int `yaml:"compact_width"`
+	RewakeIntervalMins int `yaml:"rewake_interval_mins"`
 }
 
 var InlineURLsProbablySupported bool
@@ -164,6 +165,7 @@ func NewConfig(configDir, dataDir, cacheDir, downloadDir string) *Config {
 			OverlayUserList: true,
 			TagGroupRooms: false,
 			CompactWidth: 60,
+			RewakeIntervalMins: 15,
 		},
 	}
 }

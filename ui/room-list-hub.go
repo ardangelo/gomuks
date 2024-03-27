@@ -299,7 +299,7 @@ func (hrlv *HubRoomListView) OnKeyEvent(event mauview.KeyEvent) bool {
 	case "search_rooms":
 		hrlv.parent.ShowModal(NewFuzzySearchModal(hrlv.parent, 30, 12))
 	case "settings":
-		hrlv.parent.ShowModal(NewSettingsModal(hrlv.parent, 30, 12))
+		hrlv.parent.ShowModal(NewSettingsModal(hrlv.parent, 40, 20))
 	case "scroll_up":
 		if hrlv.selected != nil {
 			index := hrlv.indexOfRoom(hrlv.selected.mxRoom)
