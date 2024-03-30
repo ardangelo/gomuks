@@ -103,6 +103,12 @@ func (gmx *Gomuks) internalStop(save bool) {
 	if save {
 		gmx.Save()
 	}
+
+	// Headless mode will print message stats afterwards
+	if gmx.matrix.IsHeadless() {
+		fmt.Println(gmx.ui.MainView().UpdateSummary())
+	}
+
 	debug.Print("Exiting process")
 	os.Exit(0)
 }
@@ -139,10 +145,8 @@ func (gmx *Gomuks) Start() {
 
 	go gmx.StartAutosave()
 
-	if !gmx.matrix.IsHeadless() {
-		if err = gmx.ui.Start(); err != nil {
-			panic(err)
-		}
+	if err = gmx.ui.Start(); err != nil {
+		panic(err)
 	}
 }
 

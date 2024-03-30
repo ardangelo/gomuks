@@ -92,12 +92,14 @@ func (s *GomuksSyncer) ProcessResponse(res *mautrix.RespSync, since string) (err
 
 	wait.Wait()
 	s.Progress.SetMessage("Finishing sync")
+	debug.Print("Finishing sync")
 
 	if since == "" && s.InitDoneCallback != nil {
 		s.InitDoneCallback()
 		s.rooms.EnableUnloading()
 	}
 	if !s.FirstSyncDone && s.FirstDoneCallback != nil {
+		debug.Print("FirstDoneCallback")
 		s.FirstDoneCallback()
 	}
 	s.FirstSyncDone = true

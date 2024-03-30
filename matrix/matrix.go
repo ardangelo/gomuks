@@ -64,6 +64,7 @@ type Container struct {
 	running  bool
 	stop     chan bool
 	headless bool
+	skipVersionCheck bool
 
 	typing int64
 }
@@ -79,8 +80,16 @@ func NewContainer(gmx ifc.Gomuks) *Container {
 	return c
 }
 
+func (c *Container) SetSkipVersionCheck() {
+	c.skipVersionCheck = true
+}
+
 func (c *Container) SetHeadless() {
 	c.headless = true
+}
+
+func (c *Container) IsHeadless() bool {
+	return c.headless
 }
 
 // Client returns the underlying mautrix Client.
@@ -104,7 +113,6 @@ var (
 )
 
 var MinSpecVersion = mautrix.SpecV11
-var SkipVersionCheck = false
 
 // InitClient initializes the mautrix client and connects to the homeserver specified in the config.
 func (c *Container) InitClient(isStartup bool) error {
@@ -158,7 +166,7 @@ func (c *Container) InitClient(isStartup bool) error {
 
 	c.stop = make(chan bool, 1)
 
-	if len(accessToken) > 0 && !c.headless {
+	if len(accessToken) > 0 {
 		go c.Start()
 	}
 	return nil
@@ -446,11 +454,6 @@ func (c *Container) InitSyncer() {
 		runtime.GC()
 		dbg.FreeOSMemory()
 	}
-	if c.headless {
-		c.syncer.FirstDoneCallback = func() {
-			c.Stop()
-		}
-	}
 
 	c.client.Syncer = c.syncer
 }
@@ -469,7 +472,7 @@ func (c *Container) OnLogin() {
 
 	debug.Print("Initializing syncer")
 	c.InitSyncer()
-	if len(c.config.AuthCache.NextBatch) == 0 {
+	if len(c.config.AuthCache.NextBatch) == 0 || c.headless {
 		c.syncer.Progress = c.ui.MainView().OpenSyncingModal()
 		c.syncer.Progress.SetMessage("Waiting for /sync response from server")
 		c.syncer.Progress.SetIndeterminate()
@@ -477,6 +480,11 @@ func (c *Container) OnLogin() {
 			c.syncer.Progress.Close()
 			c.syncer.Progress = StubSyncingModal{}
 			c.syncer.FirstDoneCallback = nil
+
+			// Sync done, but in headless mode, exit client
+			if c.headless {
+				c.gmx.Stop(true)
+			}
 		}
 	}
 
@@ -492,7 +500,7 @@ func (c *Container) Start() {
 
 	c.OnLogin()
 
-	if !SkipVersionCheck && len(c.client.AccessToken) > 0 {
+	if !c.skipVersionCheck && len(c.client.AccessToken) > 0 {
 		debug.Printf("Checking versions that %s supports", c.client.HomeserverURL)
 		resp, err := c.client.Versions()
 		if err != nil {

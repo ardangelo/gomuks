@@ -63,6 +63,8 @@ type MainView interface {
 	OpenSyncingModal() SyncingModal
 
 	NotifyMessage(room *rooms.Room, message Message, should pushrules.PushActionArrayShould)
+
+	UpdateSummary() string
 }
 
 type RoomListView interface {

@@ -535,3 +535,7 @@ func (view *MainView) LoadHistory(roomID id.RoomID) {
 func (view *MainView) CompactMode() (bool) {
 	return (view.displayState == CompactRoomList) || (view.displayState == CompactRoom)
 }
+
+func (view *MainView) UpdateSummary() string {
+	return fmt.Sprintf("No new messages")
+}
