@@ -138,8 +138,11 @@ func (gmx *Gomuks) Start() {
 	}()
 
 	go gmx.StartAutosave()
-	if err = gmx.ui.Start(); err != nil {
-		panic(err)
+
+	if !gmx.matrix.IsHeadless() {
+		if err = gmx.ui.Start(); err != nil {
+			panic(err)
+		}
 	}
 }
 

@@ -72,6 +72,7 @@ var clearCache = flag.MakeFull("c", "clear-cache", "Clear the cache directory in
 var skipVersionCheck = flag.MakeFull("s", "skip-version-check", "Skip the homeserver version checks at startup and login", "false").Bool()
 var printLogPath = flag.MakeFull("l", "print-log-path", "Print the log path instead of starting", "false").Bool()
 var clearData = flag.Make().LongKey("clear-all-data").Usage("Clear all data instead of starting").Default("false").Bool()
+var headless = flag.Make().LongKey("headless").Usage("Update new messages and exit").Default("false").Bool()
 var wantHelp, _ = flag.MakeHelpFlag()
 
 func main() {
@@ -137,8 +138,13 @@ func main() {
 	debug.Print("Cache directory:", cacheDir)
 	debug.Print("Download directory:", downloadDir)
 
-	matrix.SkipVersionCheck = *skipVersionCheck
 	gmx := initialize.NewGomuks(MainUIProvider, configDir, dataDir, cacheDir, downloadDir)
+	if *skipVersionCheck {
+		gmx.Matrix().(*matrix.Container).SetSkipVersionCheck()
+	}
+	if *headless {
+		gmx.Matrix().(*matrix.Container).SetHeadless()
+	}
 
 	if *clearCache {
 		debug.Print("Clearing cache as requested by CLI flag")
