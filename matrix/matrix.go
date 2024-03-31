@@ -492,6 +492,29 @@ func (c *Container) OnLogin() {
 	c.ui.MainView().SetRooms(c.config.Rooms)
 
 	debug.Print("OnLogin() done.")
+
+	// sync
+	fmt.Println("Beginning sync")
+	resp, err := c.gmx.Matrix().Client().FullSyncRequest(mautrix.ReqSync{
+		Timeout:        30000,
+		Since:          "",
+		FilterID:       "",
+		FullState:      true,
+		SetPresence:    c.gmx.Matrix().Client().SyncPresence,
+		Context:        context.Background(),
+		StreamResponse: true,
+	})
+	if err != nil {
+		return
+	}
+	fmt.Println("Fetched sync data")
+
+	err = c.gmx.Matrix().ProcessSyncResponse(resp, "")
+	if err != nil {
+		return
+	}
+	fmt.Println("Sync finished")
+
 }
 
 // Start moves the UI to the main view, calls OnLogin() and runs the syncer forever until stopped with Stop()
@@ -736,10 +759,6 @@ func (c *Container) HandleMessage(source mautrix.EventSource, mxEvent *event.Eve
 		return
 	}
 
-	if c.headless {
-		return
-	}
-
 	mainView := c.ui.MainView()
 
 	roomView := mainView.GetRoom(evt.RoomID)
@@ -761,7 +780,8 @@ func (c *Container) HandleMessage(source mautrix.EventSource, mxEvent *event.Eve
 	message := roomView.AddEvent(evt)
 	if message != nil {
 		roomView.MxRoom().LastReceivedMessage = message.Time()
-		if c.syncer.FirstSyncDone && evt.Sender != c.config.UserID {
+		if true || evt.Sender != c.config.UserID {
+			debug.Printf("    Adding to room")
 			pushRules := c.PushRules().GetActions(roomView.MxRoom(), evt.Event).Should()
 			mainView.NotifyMessage(roomView.MxRoom(), message, pushRules)
 			c.ui.Render()

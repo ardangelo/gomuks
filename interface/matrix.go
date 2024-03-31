@@ -78,6 +78,9 @@ type MatrixContainer interface {
 	GetCachePath(uri id.ContentURI) string
 
 	Crypto() Crypto
+
+	IsHeadless() bool
+	ProcessSyncResponse(res *mautrix.RespSync, since string) error
 }
 
 type Crypto interface {

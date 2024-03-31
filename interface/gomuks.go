@@ -28,5 +28,6 @@ type Gomuks interface {
 	Version() string
 
 	Start()
+	StartHeadless() error
 	Stop(save bool)
 }

@@ -22,6 +22,7 @@ import (
 	"os"
 	"sync/atomic"
 	"time"
+	"strings"
 
 	sync "github.com/sasha-s/go-deadlock"
 
@@ -79,6 +80,8 @@ type MainView struct {
 	gmx    ifc.Gomuks
 	config *config.Config
 
+	newMessageCounts map[string]int
+
 	parent *GomuksUI
 }
 
@@ -95,6 +98,9 @@ func (ui *GomuksUI) NewMainView() mauview.Component {
 		matrix: ui.gmx.Matrix(),
 		gmx:    ui.gmx,
 		config: ui.gmx.Config(),
+
+		newMessageCounts: make(map[string]int),
+	
 		parent: ui,
 	}
 	if mainView.config.Preferences.TagGroupRooms {
@@ -125,10 +131,6 @@ func (view *MainView) FlashLED(r, g, b uint16) {
 	}
 
 	view.led.FlashUntilKey(r, g, b)
-}
-
-func (view *MainView) StartRewake() {
-	return
 }
 
 func (view *MainView) ShowModal(modal mauview.FocusableComponent) {
@@ -478,9 +480,14 @@ func (view *MainView) NotifyMessage(room *rooms.Room, message ifc.Message, shoul
 	recentlyFocused := time.Now().Add(-30 * time.Second).Before(view.lastFocusTime)
 	isFocused := time.Now().Add(-5 * time.Second).Before(view.lastFocusTime)
 
-	if !isCurrent || !isFocused {
+	fmt.Println("    New message on %s", room.GetTitle())
+
+	if !isCurrent || !isFocused || view.matrix.IsHeadless() {
 		// The message is not in the current room, show new message status in room list.
 		room.AddUnread(message.ID(), should.Notify, should.Highlight)
+
+		// Update new message count
+		view.newMessageCounts[room.GetTitle()]++
 	} else {
 		view.matrix.MarkRead(room.ID, message.ID())
 	}
@@ -537,5 +544,23 @@ func (view *MainView) CompactMode() (bool) {
 }
 
 func (view *MainView) UpdateSummary() string {
-	return fmt.Sprintf("No new messages")
+	var result strings.Builder
+
+	// Count number of new messages
+	newMessageCount := 0
+	for _, count := range view.newMessageCounts {
+		newMessageCount += count
+	}
+
+	if newMessageCount == 1 {
+		result.WriteString("Gomuks: 1 new message\n")
+	} else {
+		result.WriteString(fmt.Sprintf("Gomuks: %d new messages\n", newMessageCount))
+	}
+
+	for roomTitle, count := range view.newMessageCounts {
+		result.WriteString(fmt.Sprintf("%s: %d\n", roomTitle, count))
+	}
+
+	return result.String()
 }
