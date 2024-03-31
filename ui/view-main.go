@@ -100,7 +100,7 @@ func (ui *GomuksUI) NewMainView() mauview.Component {
 		config: ui.gmx.Config(),
 
 		newMessageCounts: make(map[string]int),
-	
+
 		parent: ui,
 	}
 	if mainView.config.Preferences.TagGroupRooms {
@@ -480,8 +480,6 @@ func (view *MainView) NotifyMessage(room *rooms.Room, message ifc.Message, shoul
 	recentlyFocused := time.Now().Add(-30 * time.Second).Before(view.lastFocusTime)
 	isFocused := time.Now().Add(-5 * time.Second).Before(view.lastFocusTime)
 
-	fmt.Println("    New message on %s", room.GetTitle())
-
 	if !isCurrent || !isFocused || view.matrix.IsHeadless() {
 		// The message is not in the current room, show new message status in room list.
 		room.AddUnread(message.ID(), should.Notify, should.Highlight)
@@ -559,7 +557,7 @@ func (view *MainView) UpdateSummary() string {
 	}
 
 	for roomTitle, count := range view.newMessageCounts {
-		result.WriteString(fmt.Sprintf("%s: %d\n", roomTitle, count))
+		result.WriteString(fmt.Sprintf("* %s: %d\n", roomTitle, count))
 	}
 
 	return result.String()

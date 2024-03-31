@@ -493,28 +493,30 @@ func (c *Container) OnLogin() {
 
 	debug.Print("OnLogin() done.")
 
-	// sync
-	fmt.Println("Beginning sync")
-	resp, err := c.gmx.Matrix().Client().FullSyncRequest(mautrix.ReqSync{
-		Timeout:        30000,
-		Since:          "",
-		FilterID:       "",
-		FullState:      true,
-		SetPresence:    c.gmx.Matrix().Client().SyncPresence,
-		Context:        context.Background(),
-		StreamResponse: true,
-	})
-	if err != nil {
-		return
-	}
-	fmt.Println("Fetched sync data")
+	if c.headless {
+		debug.Printf("Beginning headless sync")
+		nextBatch := c.gmx.Matrix().Client().Store.LoadNextBatch(c.gmx.Matrix().Client().UserID)
+		debug.Printf("Next batch: %s", nextBatch)
+		resp, err := c.gmx.Matrix().Client().FullSyncRequest(mautrix.ReqSync{
+			Timeout:        30000,
+			Since:          nextBatch,
+			FilterID:       "",
+			FullState:      true,
+			SetPresence:    c.gmx.Matrix().Client().SyncPresence,
+			Context:        context.Background(),
+			StreamResponse: true,
+		})
+		if err != nil {
+			return
+		}
+		debug.Print("Fetched sync data")
 
-	err = c.gmx.Matrix().ProcessSyncResponse(resp, "")
-	if err != nil {
-		return
+		err = c.gmx.Matrix().ProcessSyncResponse(resp, "")
+		if err != nil {
+			return
+		}
+		debug.Print("Headless sync finished")
 	}
-	fmt.Println("Sync finished")
-
 }
 
 // Start moves the UI to the main view, calls OnLogin() and runs the syncer forever until stopped with Stop()
@@ -728,6 +730,7 @@ func (c *Container) HandleEncrypted(source mautrix.EventSource, mxEvent *event.E
 
 // HandleMessage is the event handler for the m.room.message timeline event.
 func (c *Container) HandleMessage(source mautrix.EventSource, mxEvent *event.Event) {
+	debug.Printf("Handling message")
 	room := c.GetOrCreateRoom(mxEvent.RoomID)
 	if source&mautrix.EventSourceLeave != 0 {
 		room.HasLeft = true
@@ -755,6 +758,7 @@ func (c *Container) HandleMessage(source mautrix.EventSource, mxEvent *event.Eve
 	evt := events[0]
 
 	if !c.config.AuthCache.InitialSyncDone {
+		debug.Printf("Initial sync not done yet")
 		room.LastReceivedMessage = time.Unix(evt.Timestamp/1000, evt.Timestamp%1000*1000)
 		return
 	}
@@ -770,6 +774,7 @@ func (c *Container) HandleMessage(source mautrix.EventSource, mxEvent *event.Eve
 	if !room.Loaded() {
 		pushRules := c.PushRules().GetActions(room, evt.Event).Should()
 		if !pushRules.Notify {
+			debug.Printf("Notify fallback unloaded")
 			room.LastReceivedMessage = time.Unix(evt.Timestamp/1000, evt.Timestamp%1000*1000)
 			room.AddUnread(evt.ID, pushRules.Notify, pushRules.Highlight)
 			mainView.Bump(room)
@@ -779,9 +784,13 @@ func (c *Container) HandleMessage(source mautrix.EventSource, mxEvent *event.Eve
 
 	message := roomView.AddEvent(evt)
 	if message != nil {
-		roomView.MxRoom().LastReceivedMessage = message.Time()
-		if true || evt.Sender != c.config.UserID {
-			debug.Printf("    Adding to room")
+		newForRoom := roomView.MxRoom().LastReceivedMessage.Before(message.Time())
+		if newForRoom && evt.Sender != c.config.UserID {
+			debug.Printf("Notifying on room lrm %s, msg %s",
+				roomView.MxRoom().LastReceivedMessage.Format("01-02-2006 15:04:05"),
+				message.Time().Format("01-02-2006 15:04:05"),
+			)
+			roomView.MxRoom().LastReceivedMessage = message.Time()
 			pushRules := c.PushRules().GetActions(roomView.MxRoom(), evt.Event).Should()
 			mainView.NotifyMessage(roomView.MxRoom(), message, pushRules)
 			c.ui.Render()
