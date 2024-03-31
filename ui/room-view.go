@@ -61,6 +61,8 @@ type RoomView struct {
 	inputScreen    *mauview.ProxyScreen
 	ulScreen       *mauview.ProxyScreen
 
+	isFocused bool
+
 	userListLoaded bool
 
 	prevScreen mauview.Screen
@@ -102,6 +104,7 @@ func NewRoomView(parent *MainView, room *rooms.Room) *RoomView {
 		inputScreen:    &mauview.ProxyScreen{OffsetX: 0},
 		ulScreen:       &mauview.ProxyScreen{OffsetY: StatusBarHeight, Width: UserListWidth},
 
+		isFocused: false,
 		userListLoaded: false,
 
 		parent: parent,
@@ -160,10 +163,12 @@ func (view *RoomView) GetInputText() string {
 }
 
 func (view *RoomView) Focus() {
+	view.isFocused = true
 	view.input.Focus()
 }
 
 func (view *RoomView) Blur() {
+	view.isFocused = false
 	view.StopSelecting()
 	view.input.Blur()
 }
@@ -369,8 +374,14 @@ func (view *RoomView) Draw(screen mauview.Screen) {
 	// Style topic
 	view.topic.
 		SetTextColor(tcell.ColorWhite).
-		SetBackgroundColor(tcell.ColorDarkGreen).
 		SetTextAlign(mauview.AlignLeft)
+	if view.isFocused {
+		view.topic.
+			SetBackgroundColor(tcell.ColorDarkGreen)
+	} else {
+		view.topic.
+			SetBackgroundColor(mauview.Styles.PrimitiveBackgroundColor)
+	}
 
 	// Draw always-visible elements
 	view.topic.Draw(view.topicScreen)

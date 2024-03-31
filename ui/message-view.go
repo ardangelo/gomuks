@@ -586,7 +586,7 @@ func (view *MessageView) calculateScrollBar(height int) (scrollBarHeight, scroll
 
 func (view *MessageView) getIndexOffset(screen mauview.Screen, height, messageX int) (indexOffset int) {
 	indexOffset = view.TotalHeight() - view.ScrollOffset - height
-	if indexOffset <= -PaddingAtTop {
+	if view.parent.isFocused && indexOffset <= -PaddingAtTop {
 		message := "Scroll up to load more messages."
 		if atomic.LoadInt32(&view.loadingMessages) == 1 {
 			message = "Loading more messages..."

@@ -362,8 +362,11 @@ func (hrlv *HubRoomListView) Draw(screen mauview.Screen) {
 	tm := now.Format("15:04")
 
 	headerStyle := tcell.StyleDefault.
-		Foreground(tcell.ColorWhite).
-		Background(tcell.ColorDarkGreen)
+		Foreground(tcell.ColorWhite)
+	if hrlv.isFocused {
+		headerStyle = headerStyle.
+			Background(tcell.ColorDarkGreen)
+	}
 	headerText := fmt.Sprintf("GOMUKS%*s", hrlv.width - 6, tm)
 	widget.WriteLine(screen, mauview.AlignLeft, headerText, 0, 0, hrlv.width, headerStyle)
 

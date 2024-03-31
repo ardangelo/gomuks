@@ -270,7 +270,7 @@ func (view *MainView) SetDisplayState(displayState DisplayState) {
 		view.flex.AddFixedComponent(view.roomListView.GetView(), 25).
 			AddFixedComponent(widget.NewBorder(), 1).
 			AddProportionalComponent(view.roomView, 1)
-		view.flex.SetFocused(view.roomView)
+		view.flex.SetFocused(view.roomListView.GetView())
 	}
 }
 
