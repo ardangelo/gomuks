@@ -111,6 +111,7 @@ func main() {
 	debug.Initialize()
 	defer debug.Recover()
 
+	// Create temporary root directory for benchmarking
 	if *benchmarkMode {
 		tempDir, err := os.MkdirTemp("", "gomuks-benchmark")
 
@@ -166,6 +167,7 @@ func main() {
 	}
 	if *benchmarkMode {
 		gmx.Matrix().(*matrix.Container).SetBenchmarkMode()
+		gmx.Matrix().(*matrix.Container).SetSkipVersionCheck()
 	}
 
 	if *clearCache {

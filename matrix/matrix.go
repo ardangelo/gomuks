@@ -94,7 +94,11 @@ func (c *Container) SetBenchmarkMode() {
 }
 
 func (c *Container) IsHeadless() bool {
-	return c.headless || c.headless
+	return c.headless
+}
+
+func (c *Container) IsBenchmark() bool {
+	return c.benchmarkMode
 }
 
 // Client returns the underlying mautrix Client.
@@ -121,6 +125,14 @@ var MinSpecVersion = mautrix.SpecV11
 
 // InitClient initializes the mautrix client and connects to the homeserver specified in the config.
 func (c *Container) InitClient(isStartup bool) error {
+
+	// Benchmarking test values
+	if c.IsBenchmark() {
+		c.config.HS = "localhost"
+		c.config.AccessToken = "token"
+		c.config.UserID = "userid"
+	}
+
 	if len(c.config.HS) == 0 {
 		if isStartup {
 			return nil
@@ -227,7 +239,7 @@ func (c *Container) finishLogin(resp *mautrix.RespLogin) {
 	}
 	c.config.Save()
 
-	if !c.headless {
+	if !c.IsHeadless() {
 		go c.Start()
 	}
 }
@@ -467,6 +479,120 @@ func (c *Container) ProcessSyncResponse(res *mautrix.RespSync, since string) err
 	return c.syncer.ProcessResponse(res, since)
 }
 
+var jsonstr = []byte(`
+{
+    "next_batch": "s72595_4483_1934",
+    "rooms": {
+        "join": {
+            "!726s6s6q:example.com": {
+                "summary": {
+                    "m.heroes": [
+                        "@alice:example.com",
+                        "@bob:example.com"
+                    ],
+                    "m.joined_member_count": 3,
+                    "m.invited_member_count": 0
+                },
+                "state": {
+                    "events": [
+                        {
+                            "type": "m.room.name",
+                            "state_key": "",
+                            "content": {
+                                "name": "Example Room"
+                            },
+                            "sender": "@alice:example.com",
+                            "origin_server_ts": 1432735824653,
+                            "unsigned": {
+                                "age": 1234
+                            },
+                            "event_id": "$1432735824653_6lGKaw",
+                            "room_id": "!726s6s6q:example.com"
+                        }
+                    ]
+                },
+                "timeline": {
+                    "events": [
+                        {
+                            "type": "m.room.message",
+                            "content": {
+                                "msgtype": "m.text",
+                                "body": "Hello, world!"
+                            },
+                            "sender": "@alice:example.com",
+                            "origin_server_ts": 1432735824653,
+                            "unsigned": {
+                                "age": 1234
+                            },
+                            "event_id": "$1432735824653_6lGKaw",
+                            "room_id": "!726s6s6q:example.com"
+                        },
+                        {
+                            "type": "m.room.message",
+                            "content": {
+                                "msgtype": "m.text",
+                                "body": "How are you?"
+                            },
+                            "sender": "@bob:example.com",
+                            "origin_server_ts": 1432735824654,
+                            "unsigned": {
+                                "age": 1233
+                            },
+                            "event_id": "$1432735824654_7lGKaw",
+                            "room_id": "!726s6s6q:example.com"
+                        }
+                    ],
+                    "prev_batch": "s72584_4483_1933",
+                    "limited": false
+                },
+                "ephemeral": {
+                    "events": [
+                        {
+                            "type": "m.typing",
+                            "content": {
+                                "user_ids": [
+                                    "@alice:example.com"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "account_data": {
+                    "events": [
+                        {
+                            "type": "m.fully_read",
+                            "content": {
+                                "event_id": "$1432735824653_6lGKaw"
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    },
+    "device_lists": {
+        "changed": [],
+        "left": []
+    },
+    "to_device": {
+        "events": []
+    },
+    "presence": {
+        "events": []
+    },
+    "account_data": {
+        "events": []
+    }
+}
+`)
+func BenchmarkRequest() (resp *mautrix.RespSync, err error) {
+	err = json.Unmarshal(jsonstr, &resp)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 // OnLogin initializes the syncer and updates the room list.
 func (c *Container) OnLogin() {
 
@@ -477,7 +603,7 @@ func (c *Container) OnLogin() {
 
 	debug.Print("Initializing syncer")
 	c.InitSyncer()
-	if len(c.config.AuthCache.NextBatch) == 0 || c.headless {
+	if len(c.config.AuthCache.NextBatch) == 0 || c.IsHeadless() || c.IsBenchmark() {
 		c.syncer.Progress = c.ui.MainView().OpenSyncingModal()
 		c.syncer.Progress.SetMessage("Waiting for /sync response from server")
 		c.syncer.Progress.SetIndeterminate()
@@ -487,7 +613,7 @@ func (c *Container) OnLogin() {
 			c.syncer.FirstDoneCallback = nil
 
 			// Sync done, but in headless mode, exit client
-			if c.headless {
+			if c.IsHeadless() {
 				c.gmx.Stop(true)
 			}
 		}
@@ -498,7 +624,7 @@ func (c *Container) OnLogin() {
 
 	debug.Print("OnLogin() done.")
 
-	if c.headless {
+	if c.IsHeadless() {
 		debug.Printf("Beginning headless sync")
 		nextBatch := c.gmx.Matrix().Client().Store.LoadNextBatch(c.gmx.Matrix().Client().UserID)
 		debug.Printf("Next batch: %s", nextBatch)
@@ -521,6 +647,22 @@ func (c *Container) OnLogin() {
 			return
 		}
 		debug.Print("Headless sync finished")
+
+	} else if c.IsBenchmark() {
+		debug.Printf("Beginning benchmark")
+		resp, err := BenchmarkRequest()
+		if err != nil {
+			debug.Printf("Benchmark failed:", err)
+			c.gmx.Stop(true)
+			return
+		}
+		debug.Print("Generated messages, starting process")
+
+		err = c.gmx.Matrix().ProcessSyncResponse(resp, "")
+		if err != nil {
+			return
+		}
+		debug.Print("Benchmark finished")
 	}
 }
 
