@@ -33,6 +33,7 @@ import (
 	"runtime"
 	dbg "runtime/debug"
 	"time"
+	"log"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/attachment"
@@ -479,113 +480,11 @@ func (c *Container) ProcessSyncResponse(res *mautrix.RespSync, since string) err
 	return c.syncer.ProcessResponse(res, since)
 }
 
-var jsonstr = []byte(`
-{
-    "next_batch": "s72595_4483_1934",
-    "rooms": {
-        "join": {
-            "!726s6s6q:example.com": {
-                "summary": {
-                    "m.heroes": [
-                        "@alice:example.com",
-                        "@bob:example.com"
-                    ],
-                    "m.joined_member_count": 3,
-                    "m.invited_member_count": 0
-                },
-                "state": {
-                    "events": [
-                        {
-                            "type": "m.room.name",
-                            "state_key": "",
-                            "content": {
-                                "name": "Example Room"
-                            },
-                            "sender": "@alice:example.com",
-                            "origin_server_ts": 1432735824653,
-                            "unsigned": {
-                                "age": 1234
-                            },
-                            "event_id": "$1432735824653_6lGKaw",
-                            "room_id": "!726s6s6q:example.com"
-                        }
-                    ]
-                },
-                "timeline": {
-                    "events": [
-                        {
-                            "type": "m.room.message",
-                            "content": {
-                                "msgtype": "m.text",
-                                "body": "Hello, world!"
-                            },
-                            "sender": "@alice:example.com",
-                            "origin_server_ts": 1432735824653,
-                            "unsigned": {
-                                "age": 1234
-                            },
-                            "event_id": "$1432735824653_6lGKaw",
-                            "room_id": "!726s6s6q:example.com"
-                        },
-                        {
-                            "type": "m.room.message",
-                            "content": {
-                                "msgtype": "m.text",
-                                "body": "How are you?"
-                            },
-                            "sender": "@bob:example.com",
-                            "origin_server_ts": 1432735824654,
-                            "unsigned": {
-                                "age": 1233
-                            },
-                            "event_id": "$1432735824654_7lGKaw",
-                            "room_id": "!726s6s6q:example.com"
-                        }
-                    ],
-                    "prev_batch": "s72584_4483_1933",
-                    "limited": false
-                },
-                "ephemeral": {
-                    "events": [
-                        {
-                            "type": "m.typing",
-                            "content": {
-                                "user_ids": [
-                                    "@alice:example.com"
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "account_data": {
-                    "events": [
-                        {
-                            "type": "m.fully_read",
-                            "content": {
-                                "event_id": "$1432735824653_6lGKaw"
-                            }
-                        }
-                    ]
-                }
-            }
-        }
-    },
-    "device_lists": {
-        "changed": [],
-        "left": []
-    },
-    "to_device": {
-        "events": []
-    },
-    "presence": {
-        "events": []
-    },
-    "account_data": {
-        "events": []
-    }
-}
-`)
-func BenchmarkRequest() (resp *mautrix.RespSync, err error) {
+func BenchmarkRequest(numRooms int, numEventsPerRoom int, numUsersPerRoom int) (resp *mautrix.RespSync, err error) {
+	jsonstr, err := GenerateFullSyncResp(numRooms, numEventsPerRoom, numUsersPerRoom)
+	if err != nil {
+		return nil, err
+	}
 	err = json.Unmarshal(jsonstr, &resp)
 	if err != nil {
 		return nil, err
@@ -649,8 +548,24 @@ func (c *Container) OnLogin() {
 		debug.Print("Headless sync finished")
 
 	} else if c.IsBenchmark() {
-		debug.Printf("Beginning benchmark")
-		resp, err := BenchmarkRequest()
+
+		file, err := os.OpenFile("benchmark.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			debug.Printf("Opening benchmark file failed:", err)
+			c.gmx.Stop(true)
+			return
+		}
+		defer file.Close()
+		logger := log.New(file, "", 0)
+
+		numRooms := 100
+		numEventsPerRoom := 200
+		numUsersPerRoom := 20
+
+		logger.Printf("Beginning benchmark (%d rooms, %d events per room, %d users per room)",
+			numRooms, numEventsPerRoom, numUsersPerRoom)
+		start := time.Now()
+		resp, err := BenchmarkRequest(numRooms, numEventsPerRoom, numUsersPerRoom)
 		if err != nil {
 			debug.Printf("Benchmark failed:", err)
 			c.gmx.Stop(true)
@@ -662,7 +577,9 @@ func (c *Container) OnLogin() {
 		if err != nil {
 			return
 		}
-		debug.Print("Benchmark finished")
+		elapsed := time.Since(start)
+		logger.Printf("Initial sync execution time: %s\n", elapsed)
+		logger.Print("Benchmark finished")
 	}
 }
 
