@@ -73,6 +73,7 @@ var skipVersionCheck = flag.MakeFull("s", "skip-version-check", "Skip the homese
 var printLogPath = flag.MakeFull("l", "print-log-path", "Print the log path instead of starting", "false").Bool()
 var clearData = flag.Make().LongKey("clear-all-data").Usage("Clear all data instead of starting").Default("false").Bool()
 var headless = flag.Make().LongKey("headless").Usage("Update new messages and exit").Default("false").Bool()
+var benchmarkMode = flag.Make().LongKey("benchmark").Usage("Run benchmark in given cache directory").Default("false").Bool()
 var wantHelp, _ = flag.MakeHelpFlag()
 
 func main() {
@@ -110,6 +111,24 @@ func main() {
 	debug.Initialize()
 	defer debug.Recover()
 
+	if *benchmarkMode {
+		tempDir, err := os.MkdirTemp("", "gomuks-benchmark")
+
+		if err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "Failed to create temporary directory:", err)
+			os.Exit(3)
+		}
+
+		defer func() {
+			err := os.RemoveAll(tempDir)
+			if err != nil {
+				_, _ = fmt.Fprintln(os.Stderr, "Failed to remove temporary directory:", err)
+			}
+		}()
+
+		os.Setenv("GOMUKS_ROOT", tempDir)
+	}
+
 	var configDir, dataDir, cacheDir, downloadDir string
 
 	configDir, err = initialize.UserConfigDir()
@@ -144,6 +163,9 @@ func main() {
 	}
 	if *headless {
 		gmx.Matrix().(*matrix.Container).SetHeadless()
+	}
+	if *benchmarkMode {
+		gmx.Matrix().(*matrix.Container).SetBenchmarkMode()
 	}
 
 	if *clearCache {

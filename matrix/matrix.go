@@ -65,6 +65,7 @@ type Container struct {
 	stop     chan bool
 	headless bool
 	skipVersionCheck bool
+	benchmarkMode bool
 
 	typing int64
 }
@@ -88,8 +89,12 @@ func (c *Container) SetHeadless() {
 	c.headless = true
 }
 
+func (c *Container) SetBenchmarkMode() {
+	c.benchmarkMode = true
+}
+
 func (c *Container) IsHeadless() bool {
-	return c.headless
+	return c.headless || c.headless
 }
 
 // Client returns the underlying mautrix Client.
